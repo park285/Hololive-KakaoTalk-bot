@@ -31,7 +31,7 @@ func main() {
 
 	ctx := context.Background()
 
-	talents, err := domain.LoadOfficialTalents()
+	talents, err := domain.LoadTalents()
 	if err != nil {
 		logger.Fatal("failed to load official talents list", zap.Error(err))
 	}

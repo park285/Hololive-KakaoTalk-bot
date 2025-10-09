@@ -13,6 +13,7 @@ const (
 	CommandAlarmClear  CommandType = "alarm_clear"
 	CommandAsk         CommandType = "ask"
 	CommandMemberInfo  CommandType = "member_info"
+	CommandStats       CommandType = "stats"
 	CommandUnknown     CommandType = "unknown"
 )
 

@@ -18,7 +18,6 @@ const (
 	credentialsFile = "credentials.json"
 )
 
-// YouTubeOAuthService handles YouTube API with OAuth 2.0 authentication
 type YouTubeOAuthService struct {
 	service *youtube.Service
 	config  *oauth2.Config
@@ -26,31 +25,26 @@ type YouTubeOAuthService struct {
 	logger  *zap.Logger
 }
 
-// NewYouTubeOAuthService creates YouTube service with OAuth authentication
 func NewYouTubeOAuthService(logger *zap.Logger) (*YouTubeOAuthService, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
-	// Read credentials
 	credBytes, err := os.ReadFile(credentialsFile)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read credentials file: %w", err)
 	}
 
-	// Parse config from credentials
 	config, err := google.ConfigFromJSON(credBytes, youtube.YoutubeReadonlyScope)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse credentials: %w", err)
 	}
 
-	// Load or create token
 	token, err := loadToken(tokenFile)
 	if err != nil {
 		logger.Warn("No existing token found, need to authorize",
 			zap.String("file", tokenFile))
 
-		// Need manual authorization
 		return &YouTubeOAuthService{
 			config: config,
 			token:  nil,
@@ -58,7 +52,6 @@ func NewYouTubeOAuthService(logger *zap.Logger) (*YouTubeOAuthService, error) {
 		}, nil
 	}
 
-	// Create YouTube service
 	ctx := context.Background()
 	client := config.Client(ctx, token)
 
@@ -78,13 +71,11 @@ func NewYouTubeOAuthService(logger *zap.Logger) (*YouTubeOAuthService, error) {
 	}, nil
 }
 
-// Authorize performs the OAuth 2.0 authorization flow
 func (ys *YouTubeOAuthService) Authorize(ctx context.Context) error {
 	if ys == nil {
 		return fmt.Errorf("service not initialized")
 	}
 
-	// Get authorization code from user
 	authURL := ys.config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 
 	ys.logger.Info("Authorization required")
@@ -98,20 +89,17 @@ func (ys *YouTubeOAuthService) Authorize(ctx context.Context) error {
 		return fmt.Errorf("unable to read authorization code: %w", err)
 	}
 
-	// Exchange code for token
 	token, err := ys.config.Exchange(ctx, code)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve token: %w", err)
 	}
 
-	// Save token
 	if err := saveToken(tokenFile, token); err != nil {
 		return fmt.Errorf("unable to save token: %w", err)
 	}
 
 	ys.token = token
 
-	// Create YouTube service
 	client := ys.config.Client(ctx, token)
 	ytService, err := youtube.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
@@ -128,12 +116,10 @@ func (ys *YouTubeOAuthService) Authorize(ctx context.Context) error {
 	return nil
 }
 
-// IsAuthorized checks if the service is authenticated
 func (ys *YouTubeOAuthService) IsAuthorized() bool {
 	return ys != nil && ys.service != nil && ys.token != nil
 }
 
-// GetService returns the YouTube service (may be nil if not authorized)
 func (ys *YouTubeOAuthService) GetService() *youtube.Service {
 	if ys == nil {
 		return nil
@@ -141,7 +127,6 @@ func (ys *YouTubeOAuthService) GetService() *youtube.Service {
 	return ys.service
 }
 
-// loadToken loads token from file
 func loadToken(file string) (*oauth2.Token, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -154,7 +139,6 @@ func loadToken(file string) (*oauth2.Token, error) {
 	return token, err
 }
 
-// saveToken saves token to file
 func saveToken(file string, token *oauth2.Token) error {
 	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {

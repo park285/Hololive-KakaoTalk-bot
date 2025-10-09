@@ -5,8 +5,7 @@ import (
 	"strings"
 )
 
-// BuildClarificationPrompt builds the prompt for generating clarification messages
-func BuildClarificationPrompt(userQuery string) string {
+func BuildBasic(userQuery string) string {
 	return fmt.Sprintf(`You are a Hololive assistant who clarifies ambiguous user requests in Korean.
 
 The user asked: "%s"
@@ -28,8 +27,7 @@ CRITICAL Guidelines:
 `, userQuery)
 }
 
-// BuildSmartClarificationPrompt builds an enhanced prompt that checks Hololive-relatedness
-func BuildSmartClarificationPrompt(userQuery string, memberNames []string) string {
+func BuildWithMembers(userQuery string, memberNames []string) string {
 	memberList := ""
 	if len(memberNames) > 0 {
 		memberList = fmt.Sprintf("\n\n홀로라이브 멤버 리스트: [%s]", strings.Join(memberNames, ", "))
@@ -67,8 +65,7 @@ JSON 형식으로 반환:
 `, userQuery, memberList)
 }
 
-// BuildSmartClarificationPromptWithoutMembers builds prompt for use with cached member list
-func BuildSmartClarificationPromptWithoutMembers(userQuery string) string {
+func BuildWithoutMembers(userQuery string) string {
 	return fmt.Sprintf(`User question: "%s"
 
 Analyze using the Hololive member list above.
@@ -92,5 +89,3 @@ Rules:
 - Focus on CORE INTENT, ignore all grammar/conjugation differences
 `, userQuery)
 }
-
-

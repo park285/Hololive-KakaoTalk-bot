@@ -56,6 +56,10 @@ Thumbs.db
 *.backup*
 *backup*.json
 
+# Development phase documentation
+PHASE*.md
+PHASE*_COMPLETE.md
+
 # Coverage reports
 *.coverprofile
 coverage.out

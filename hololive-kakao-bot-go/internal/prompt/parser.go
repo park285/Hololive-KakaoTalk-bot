@@ -2,14 +2,12 @@ package prompt
 
 import "fmt"
 
-// ParserPromptVars holds variables for the parser prompt template
 type ParserPromptVars struct {
 	MemberCount       int
 	MemberListWithIDs string
 	UserQuery         string
 }
 
-// BuildParserPrompt builds the Gemini natural language parser prompt
 func BuildParserPrompt(vars ParserPromptVars) string {
 	return fmt.Sprintf(`You are a natural language parser for a Hololive Discord bot.
 Parse user's query (Korean/English/Japanese) and convert it to appropriate Discord command.

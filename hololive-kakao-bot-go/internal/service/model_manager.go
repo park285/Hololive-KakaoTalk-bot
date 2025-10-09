@@ -17,7 +17,6 @@ import (
 	"google.golang.org/genai"
 )
 
-// ModelManager manages AI model interactions with fallback support
 type ModelManager struct {
 	geminiClient       *genai.Client
 	openaiClient       *openai.Client
@@ -28,7 +27,6 @@ type ModelManager struct {
 	circuitBreaker     *util.CircuitBreaker
 }
 
-// ModelManagerConfig holds configuration for ModelManager
 type ModelManagerConfig struct {
 	GeminiAPIKey       string
 	OpenAIAPIKey       string
@@ -37,9 +35,7 @@ type ModelManagerConfig struct {
 	EnableFallback     bool
 }
 
-// NewModelManager creates a new ModelManager
 func NewModelManager(ctx context.Context, cfg ModelManagerConfig, logger *zap.Logger) (*ModelManager, error) {
-	// Initialize Gemini client
 	geminiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  cfg.GeminiAPIKey,
 		Backend: genai.BackendGeminiAPI,
@@ -48,7 +44,6 @@ func NewModelManager(ctx context.Context, cfg ModelManagerConfig, logger *zap.Lo
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
 
-	// Default models
 	defaultGemini := cfg.DefaultGeminiModel
 	if defaultGemini == "" {
 		defaultGemini = "gemini-2.5-flash"
@@ -56,7 +51,7 @@ func NewModelManager(ctx context.Context, cfg ModelManagerConfig, logger *zap.Lo
 
 	defaultOpenAI := cfg.DefaultOpenAIModel
 	if defaultOpenAI == "" {
-		defaultOpenAI = "gpt-4.1"
+		defaultOpenAI = "gpt-5-mini"
 	}
 
 	mm := &ModelManager{
@@ -67,7 +62,6 @@ func NewModelManager(ctx context.Context, cfg ModelManagerConfig, logger *zap.Lo
 		enableFallback:     cfg.EnableFallback && cfg.OpenAIAPIKey != "",
 	}
 
-	// Initialize OpenAI client if API key provided
 	if cfg.OpenAIAPIKey != "" {
 		client := openai.NewClient(option.WithAPIKey(cfg.OpenAIAPIKey))
 		mm.openaiClient = &client
@@ -76,7 +70,6 @@ func NewModelManager(ctx context.Context, cfg ModelManagerConfig, logger *zap.Lo
 		logger.Info("OpenAI fallback disabled (no API key)")
 	}
 
-	// Initialize Circuit Breaker with health check
 	mm.circuitBreaker = util.NewCircuitBreaker(
 		constants.CircuitBreakerConfig.FailureThreshold,
 		constants.CircuitBreakerConfig.ResetTimeout,
@@ -88,19 +81,15 @@ func NewModelManager(ctx context.Context, cfg ModelManagerConfig, logger *zap.Lo
 	return mm, nil
 }
 
-// GetGeminiClient returns the underlying Gemini client for advanced features like caching
 func (mm *ModelManager) GetGeminiClient() *genai.Client {
 	return mm.geminiClient
 }
 
-// GetDefaultGeminiModel returns the default Gemini model name
 func (mm *ModelManager) GetDefaultGeminiModel() string {
 	return mm.defaultGeminiModel
 }
 
-// GenerateJSON generates JSON response and unmarshals into dest with validation
 func (mm *ModelManager) GenerateJSON(ctx context.Context, prompt string, preset ModelPreset, dest any, opts *GenerateOptions) (*GenerateMetadata, error) {
-	// Check circuit breaker
 	if !mm.circuitBreaker.CanExecute() {
 		status := mm.circuitBreaker.GetStatus()
 		nextRetry := "알 수 없음"
@@ -120,13 +109,11 @@ func (mm *ModelManager) GenerateJSON(ctx context.Context, prompt string, preset 
 	var text string
 	var metadata *GenerateMetadata
 
-	// Force JSON mode
 	if opts == nil {
 		opts = &GenerateOptions{}
 	}
 	opts.JSONMode = true
 
-	// Try Gemini first; use OpenAI as fallback if enabled
 	geminiText, geminiErr := mm.generateWithGemini(ctx, prompt, preset, opts)
 	if geminiErr == nil {
 		mm.circuitBreaker.RecordSuccess()
@@ -137,7 +124,6 @@ func (mm *ModelManager) GenerateJSON(ctx context.Context, prompt string, preset 
 			UsedFallback: false,
 		}
 	} else {
-		// Gemini failed - attempt OpenAI fallback when configured
 		if mm.enableFallback && mm.openaiClient != nil {
 			openaiText, openaiErr := mm.generateWithOpenAI(ctx, prompt, preset, opts)
 			if openaiErr == nil {
@@ -149,7 +135,6 @@ func (mm *ModelManager) GenerateJSON(ctx context.Context, prompt string, preset 
 					UsedFallback: true,
 				}
 			} else {
-				// Both failed
 				if mm.isServiceFailure(geminiErr) || mm.isServiceFailure(openaiErr) {
 					timeout := constants.CircuitBreakerConfig.ResetTimeout
 					if mm.isRateLimitError(geminiErr) || mm.isRateLimitError(openaiErr) {
@@ -160,7 +145,6 @@ func (mm *ModelManager) GenerateJSON(ctx context.Context, prompt string, preset 
 				return nil, fmt.Errorf("AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요")
 			}
 		} else {
-			// Gemini failed and fallback is disabled
 			if mm.isServiceFailure(geminiErr) {
 				timeout := constants.CircuitBreakerConfig.ResetTimeout
 				if mm.isRateLimitError(geminiErr) {
@@ -172,13 +156,11 @@ func (mm *ModelManager) GenerateJSON(ctx context.Context, prompt string, preset 
 		}
 	}
 
-	// Validate response is not empty
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
 		return nil, fmt.Errorf("%s API returned empty response", metadata.Provider)
 	}
 
-	// Remove markdown code blocks (```json ... ``` or ``` ... ```)
 	cleaned := trimmed
 	if strings.HasPrefix(cleaned, "```json") {
 		cleaned = strings.TrimPrefix(cleaned, "```json")
@@ -192,7 +174,6 @@ func (mm *ModelManager) GenerateJSON(ctx context.Context, prompt string, preset 
 		cleaned = strings.TrimSpace(cleaned)
 	}
 
-	// Parse JSON
 	if err := json.Unmarshal([]byte(cleaned), dest); err != nil {
 		previewLen := util.Min(len(cleaned), 200)
 		mm.logger.Error("Failed to unmarshal JSON response",
@@ -220,12 +201,10 @@ func (mm *ModelManager) getOpenAIModel(opts *GenerateOptions) string {
 	return mm.defaultOpenAIModel
 }
 
-// generateWithGemini generates content using Gemini
 func (mm *ModelManager) generateWithGemini(ctx context.Context, prompt string, preset ModelPreset, opts *GenerateOptions) (string, error) {
 	modelName := mm.getGeminiModel(opts)
 	config := GetPresetConfig(preset)
 
-	// Apply overrides
 	if opts != nil && opts.Overrides != nil {
 		if opts.Overrides.Temperature > 0 {
 			config.Temperature = opts.Overrides.Temperature
@@ -241,7 +220,6 @@ func (mm *ModelManager) generateWithGemini(ctx context.Context, prompt string, p
 		}
 	}
 
-	// Set JSON mode
 	if opts != nil && opts.JSONMode {
 		config.ResponseMimeType = "application/json"
 	}
@@ -252,7 +230,6 @@ func (mm *ModelManager) generateWithGemini(ctx context.Context, prompt string, p
 		zap.Bool("json_mode", opts != nil && opts.JSONMode),
 	)
 
-	// Create generation config
 	topK := float32(config.TopK)
 	maxTokens := int32(config.MaxOutputTokens)
 
@@ -264,13 +241,11 @@ func (mm *ModelManager) generateWithGemini(ctx context.Context, prompt string, p
 		ResponseMIMEType: config.ResponseMimeType,
 	}
 
-	// Apply cached content if provided
 	if opts != nil && opts.CachedContent != "" {
 		genConfig.CachedContent = opts.CachedContent
 		mm.logger.Debug("Using cached content", zap.String("cache_name", opts.CachedContent))
 	}
 
-	// Generate content
 	resp, err := mm.geminiClient.Models.GenerateContent(ctx, modelName, []*genai.Content{
 		{
 			Parts: []*genai.Part{
@@ -284,7 +259,6 @@ func (mm *ModelManager) generateWithGemini(ctx context.Context, prompt string, p
 		return "", err
 	}
 
-	// Extract text from response
 	text := extractTextFromGeminiResponse(resp)
 	if text == "" {
 		return "", fmt.Errorf("empty response from Gemini")
@@ -294,7 +268,6 @@ func (mm *ModelManager) generateWithGemini(ctx context.Context, prompt string, p
 	return text, nil
 }
 
-// generateWithOpenAI generates content using OpenAI
 func (mm *ModelManager) generateWithOpenAI(ctx context.Context, prompt string, preset ModelPreset, opts *GenerateOptions) (string, error) {
 	if mm.openaiClient == nil {
 		return "", fmt.Errorf("OpenAI client not initialized")
@@ -308,9 +281,14 @@ func (mm *ModelManager) generateWithOpenAI(ctx context.Context, prompt string, p
 		zap.String("preset", string(preset)),
 	)
 
-	// Map model name to constant
 	var model openai.ChatModel
 	switch modelName {
+	case "gpt-5-mini":
+		model = openai.ChatModelGPT5Mini
+	case "gpt-5":
+		model = openai.ChatModelGPT5
+	case "gpt-5-nano":
+		model = openai.ChatModelGPT5Nano
 	case "gpt-4.1":
 		model = openai.ChatModelGPT4_1
 	case "gpt-4.1-mini":
@@ -327,12 +305,10 @@ func (mm *ModelManager) generateWithOpenAI(ctx context.Context, prompt string, p
 		model = openai.ChatModelGPT4_1
 	}
 
-	// Build messages with system instruction for JSON mode
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage(prompt),
 	}
 
-	// Prepend system message for JSON mode
 	if opts != nil && opts.JSONMode {
 		messages = []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage("You must respond with valid JSON only. Do not include any text outside the JSON object."),
@@ -340,12 +316,17 @@ func (mm *ModelManager) generateWithOpenAI(ctx context.Context, prompt string, p
 		}
 	}
 
+	isGPT5 := modelName == "gpt-5" || modelName == "gpt-5-mini" || modelName == "gpt-5-nano"
+	
 	params := openai.ChatCompletionNewParams{
-		Model:       model,
-		Messages:    messages,
-		Temperature: openai.Float(float64(config.Temperature)),
-		MaxTokens:   openai.Int(int64(config.MaxTokens)),
-		TopP:        openai.Float(float64(config.TopP)),
+		Model:               model,
+		Messages:            messages,
+		MaxCompletionTokens: openai.Int(int64(config.MaxTokens)),
+	}
+	
+	if !isGPT5 {
+		params.Temperature = openai.Float(float64(config.Temperature))
+		params.TopP = openai.Float(float64(config.TopP))
 	}
 
 	resp, err := mm.openaiClient.Chat.Completions.New(ctx, params)
@@ -359,13 +340,12 @@ func (mm *ModelManager) generateWithOpenAI(ctx context.Context, prompt string, p
 	}
 
 	text := resp.Choices[0].Message.Content
-	
-	// Log cache hits (OpenAI automatic prompt caching)
+
 	cachedTokens := int64(0)
 	if resp.Usage.PromptTokensDetails.CachedTokens > 0 {
 		cachedTokens = resp.Usage.PromptTokensDetails.CachedTokens
 	}
-	
+
 	mm.logger.Info("OpenAI response received",
 		zap.Int("length", len(text)),
 		zap.Int64("prompt_tokens", resp.Usage.PromptTokens),
@@ -377,7 +357,6 @@ func (mm *ModelManager) generateWithOpenAI(ctx context.Context, prompt string, p
 	return text, nil
 }
 
-// healthCheckPing performs a health check on AI services
 func (mm *ModelManager) healthCheckPing() bool {
 	mm.logger.Info("Health Check: Testing AI services...")
 
@@ -402,7 +381,6 @@ func (mm *ModelManager) healthCheckPing() bool {
 	return isHealthy
 }
 
-// pingGemini pings Gemini API
 func (mm *ModelManager) pingGemini(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -432,7 +410,6 @@ func (mm *ModelManager) pingGemini(ctx context.Context) bool {
 	return extractTextFromGeminiResponse(resp) != ""
 }
 
-// pingOpenAI pings OpenAI API
 func (mm *ModelManager) pingOpenAI(ctx context.Context) bool {
 	if mm.openaiClient == nil {
 		return false
@@ -460,7 +437,6 @@ func (mm *ModelManager) pingOpenAI(ctx context.Context) bool {
 	return len(resp.Choices) > 0
 }
 
-// isServiceFailure checks if error is a service failure (5xx, 429, timeout)
 func (mm *ModelManager) isServiceFailure(err error) bool {
 	if err == nil {
 		return false
@@ -468,23 +444,19 @@ func (mm *ModelManager) isServiceFailure(err error) bool {
 
 	msg := err.Error()
 
-	// Timeout errors
 	if strings.Contains(msg, "timeout") || strings.Contains(msg, "ETIMEDOUT") {
 		return true
 	}
 
-	// Rate limit
 	if mm.isRateLimitError(err) {
 		return true
 	}
 
-	// 5xx status codes
 	statusRegex := regexp.MustCompile(`\b(5\d{2})\b`)
 	if statusRegex.MatchString(msg) {
 		return true
 	}
 
-	// Gemini error: {"error":{"code":500,...}}
 	geminiCodeRegex := regexp.MustCompile(`"code":(\d{3})`)
 	if matches := geminiCodeRegex.FindStringSubmatch(msg); len(matches) > 1 {
 		if code, err := strconv.Atoi(matches[1]); err == nil {
@@ -492,7 +464,6 @@ func (mm *ModelManager) isServiceFailure(err error) bool {
 		}
 	}
 
-	// OpenAI error: "500 ..."
 	openaiCodeRegex := regexp.MustCompile(`^(\d{3})\s`)
 	if matches := openaiCodeRegex.FindStringSubmatch(msg); len(matches) > 1 {
 		if code, err := strconv.Atoi(matches[1]); err == nil {
@@ -503,7 +474,6 @@ func (mm *ModelManager) isServiceFailure(err error) bool {
 	return false
 }
 
-// isRateLimitError checks if error is a rate limit error (429)
 func (mm *ModelManager) isRateLimitError(err error) bool {
 	if err == nil {
 		return false
@@ -511,12 +481,10 @@ func (mm *ModelManager) isRateLimitError(err error) bool {
 
 	msg := err.Error()
 
-	// Text matching
 	if strings.Contains(msg, "429") || strings.Contains(msg, "Rate limit") || strings.Contains(msg, "quota") {
 		return true
 	}
 
-	// Gemini: {"error":{"code":429,...}}
 	geminiCodeRegex := regexp.MustCompile(`"code":(\d{3})`)
 	if matches := geminiCodeRegex.FindStringSubmatch(msg); len(matches) > 1 {
 		if code, err := strconv.Atoi(matches[1]); err == nil {
@@ -524,7 +492,6 @@ func (mm *ModelManager) isRateLimitError(err error) bool {
 		}
 	}
 
-	// OpenAI: "429 ..."
 	openaiCodeRegex := regexp.MustCompile(`^(\d{3})\s`)
 	if matches := openaiCodeRegex.FindStringSubmatch(msg); len(matches) > 1 {
 		if code, err := strconv.Atoi(matches[1]); err == nil {
@@ -535,7 +502,6 @@ func (mm *ModelManager) isRateLimitError(err error) bool {
 	return false
 }
 
-// extractTextFromGeminiResponse extracts text from Gemini response
 func extractTextFromGeminiResponse(resp *genai.GenerateContentResponse) string {
 	if resp == nil || len(resp.Candidates) == 0 {
 		return ""
@@ -556,12 +522,10 @@ func extractTextFromGeminiResponse(resp *genai.GenerateContentResponse) string {
 	return strings.Join(texts, "")
 }
 
-// GetCircuitStatus returns circuit breaker status
 func (mm *ModelManager) GetCircuitStatus() util.CircuitBreakerStatus {
 	return mm.circuitBreaker.GetStatus()
 }
 
-// ResetCircuit manually resets the circuit breaker
 func (mm *ModelManager) ResetCircuit() {
 	mm.circuitBreaker.Reset()
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
 )
 
-// CandidateChannel represents a channel candidate for selection
 type CandidateChannel struct {
 	Index       int
 	Name        string
@@ -15,14 +14,12 @@ type CandidateChannel struct {
 	ID          string
 }
 
-// SelectorPromptVars holds variables for the selector prompt template
 type SelectorPromptVars struct {
-	UserQuery          string
-	CandidateChannels  []CandidateChannel
+	UserQuery         string
+	CandidateChannels []CandidateChannel
 }
 
-// BuildSelectorPrompt builds the Gemini channel selector prompt
-func BuildSelectorPrompt(userQuery string, channels []*domain.Channel) string {
+func BuildSelector(userQuery string, channels []*domain.Channel) string {
 	candidates := make([]string, len(channels))
 	for i, ch := range channels {
 		englishName := "N/A"

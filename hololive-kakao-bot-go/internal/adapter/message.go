@@ -13,24 +13,20 @@ import (
 
 var controlCharsPattern = regexp.MustCompile(`[\x00-\x1F\x7F]`)
 
-// MessageAdapter converts KakaoTalk messages to bot commands
 type MessageAdapter struct {
 	prefix string
 }
 
-// NewMessageAdapter creates a new MessageAdapter
 func NewMessageAdapter(prefix string) *MessageAdapter {
 	return &MessageAdapter{prefix: prefix}
 }
 
-// ParsedCommand represents a parsed command
 type ParsedCommand struct {
 	Type       domain.CommandType
 	Params     map[string]any
 	RawMessage string
 }
 
-// ParseMessage parses a KakaoTalk message into a command
 func (ma *MessageAdapter) ParseMessage(message *iris.Message) *ParsedCommand {
 	if message == nil || message.Msg == "" {
 		return ma.createUnknownCommand("")
@@ -38,15 +34,12 @@ func (ma *MessageAdapter) ParseMessage(message *iris.Message) *ParsedCommand {
 
 	text := strings.TrimSpace(message.Msg)
 
-	// Check prefix
 	if !strings.HasPrefix(text, ma.prefix) {
 		return ma.createUnknownCommand(text)
 	}
 
-	// Remove prefix
 	commandText := strings.TrimSpace(text[len(ma.prefix):])
 
-	// Split by whitespace
 	parts := strings.Fields(commandText)
 	if len(parts) == 0 {
 		return ma.createUnknownCommand(text)
@@ -55,7 +48,6 @@ func (ma *MessageAdapter) ParseMessage(message *iris.Message) *ParsedCommand {
 	command := strings.ToLower(parts[0])
 	args := parts[1:]
 
-	// Match commands
 	if ma.isLiveCommand(command) {
 		return &ParsedCommand{
 			Type:       domain.CommandLive,
@@ -92,6 +84,14 @@ func (ma *MessageAdapter) ParseMessage(message *iris.Message) *ParsedCommand {
 		}
 	}
 
+	if ma.isStatsCommand(command) {
+		return &ParsedCommand{
+			Type:       domain.CommandStats,
+			Params:     map[string]any{"action": "gainers"},
+			RawMessage: text,
+		}
+	}
+
 	if ma.isMemberInfoCommand(command) {
 		query := strings.TrimSpace(strings.Join(args, " "))
 		params := make(map[string]any)
@@ -117,7 +117,6 @@ func (ma *MessageAdapter) ParseMessage(message *iris.Message) *ParsedCommand {
 		}
 	}
 
-	// AI natural language processing
 	sanitized := ma.sanitizeForGemini(commandText)
 	if sanitized == "" {
 		return ma.createUnknownCommand(text)
@@ -130,7 +129,6 @@ func (ma *MessageAdapter) ParseMessage(message *iris.Message) *ParsedCommand {
 	}
 }
 
-// Command matchers
 
 func (ma *MessageAdapter) isLiveCommand(cmd string) bool {
 	return util.Contains([]string{"라이브", "live", "방송중", "생방송"}, cmd)
@@ -169,7 +167,10 @@ func (ma *MessageAdapter) isMemberInfoCommand(cmd string) bool {
 	return util.Contains([]string{"멤버", "member", "프로필", "profile", "정보", "info"}, cmd)
 }
 
-// Argument parsers
+func (ma *MessageAdapter) isStatsCommand(cmd string) bool {
+	return util.Contains([]string{"구독자순위", "순위", "통계", "stats", "ranking"}, cmd)
+}
+
 
 func (ma *MessageAdapter) parseUpcomingArgs(args []string) map[string]any {
 	if len(args) == 0 {
@@ -181,7 +182,6 @@ func (ma *MessageAdapter) parseUpcomingArgs(args []string) map[string]any {
 		return map[string]any{"hours": 24}
 	}
 
-	// Clamp to 1-168
 	if hours < 1 {
 		hours = 1
 	}
@@ -230,7 +230,6 @@ func (ma *MessageAdapter) parseAlarmCommand(cmd string, args []string, rawMessag
 	subCmd := strings.ToLower(args[0])
 	restArgs := args[1:]
 
-	// Add/Set
 	if util.Contains([]string{"추가", "설정", "set", "add"}, subCmd) {
 		return &ParsedCommand{
 			Type: domain.CommandAlarmAdd,
@@ -242,7 +241,6 @@ func (ma *MessageAdapter) parseAlarmCommand(cmd string, args []string, rawMessag
 		}
 	}
 
-	// Remove/Delete
 	if util.Contains([]string{"제거", "삭제", "remove", "del", "delete"}, subCmd) {
 		return &ParsedCommand{
 			Type: domain.CommandAlarmRemove,
@@ -254,7 +252,6 @@ func (ma *MessageAdapter) parseAlarmCommand(cmd string, args []string, rawMessag
 		}
 	}
 
-	// List
 	if util.Contains([]string{"목록", "list", "show"}, subCmd) {
 		return &ParsedCommand{
 			Type:       domain.CommandAlarmList,
@@ -263,7 +260,6 @@ func (ma *MessageAdapter) parseAlarmCommand(cmd string, args []string, rawMessag
 		}
 	}
 
-	// Clear
 	if util.Contains([]string{"초기화", "clear", "reset"}, subCmd) {
 		return &ParsedCommand{
 			Type:       domain.CommandAlarmClear,
@@ -272,7 +268,6 @@ func (ma *MessageAdapter) parseAlarmCommand(cmd string, args []string, rawMessag
 		}
 	}
 
-	// Default to help
 	return &ParsedCommand{
 		Type:       domain.CommandHelp,
 		Params:     make(map[string]any),
@@ -289,10 +284,8 @@ func (ma *MessageAdapter) createUnknownCommand(text string) *ParsedCommand {
 }
 
 func (ma *MessageAdapter) sanitizeForGemini(input string) string {
-	// Remove control characters
 	withoutControl := controlCharsPattern.ReplaceAllString(input, " ")
 
-	// Normalize whitespace
 	normalized := strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(withoutControl, " "))
 
 	if len(normalized) == 0 {
@@ -305,4 +298,3 @@ func (ma *MessageAdapter) sanitizeForGemini(input string) string {
 
 	return normalized
 }
-

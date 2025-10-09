@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// CircuitState represents the state of the circuit breaker
 type CircuitState string
 
 const (
@@ -16,30 +15,26 @@ const (
 	CircuitStateHalfOpen CircuitState = "HALF_OPEN" // 복구 시도 중
 )
 
-// String implements Stringer interface
 func (s CircuitState) String() string {
 	return string(s)
 }
 
-// HealthCheckFunction is a function that checks if the service is healthy
 type HealthCheckFunction func() bool
 
-// CircuitBreaker implements the circuit breaker pattern
 type CircuitBreaker struct {
-	state                 CircuitState
-	failureCount          int
-	failureThreshold      int
-	resetTimeout          time.Duration
-	nextRetryTime         time.Time
-	nextHealthCheckTime   time.Time
-	healthCheckInterval   time.Duration
-	isHealthChecking      bool
-	healthCheckFn         HealthCheckFunction
-	logger                *zap.Logger
-	mu                    sync.RWMutex
+	state               CircuitState
+	failureCount        int
+	failureThreshold    int
+	resetTimeout        time.Duration
+	nextRetryTime       time.Time
+	nextHealthCheckTime time.Time
+	healthCheckInterval time.Duration
+	isHealthChecking    bool
+	healthCheckFn       HealthCheckFunction
+	logger              *zap.Logger
+	mu                  sync.RWMutex
 }
 
-// NewCircuitBreaker creates a new circuit breaker
 func NewCircuitBreaker(
 	failureThreshold int,
 	resetTimeout time.Duration,
@@ -58,20 +53,16 @@ func NewCircuitBreaker(
 	}
 }
 
-// GetState returns the current circuit state
 func (cb *CircuitBreaker) GetState() CircuitState {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	// OPEN 상태에서 Health Check 시도
 	if cb.state == CircuitStateOpen {
 		now := time.Now()
 
-		// Health Check 함수가 설정된 경우
 		if cb.healthCheckFn != nil && now.After(cb.nextHealthCheckTime) && !cb.isHealthChecking {
 			go cb.tryHealthCheck()
 		} else if cb.healthCheckFn == nil && now.After(cb.nextRetryTime) {
-			// Health Check가 없으면 시간 기반 복구
 			cb.transitionTo(CircuitStateHalfOpen)
 		}
 	}
@@ -79,13 +70,11 @@ func (cb *CircuitBreaker) GetState() CircuitState {
 	return cb.state
 }
 
-// CanExecute checks if requests can be executed
 func (cb *CircuitBreaker) CanExecute() bool {
 	state := cb.GetState()
 	return state != CircuitStateOpen
 }
 
-// RecordSuccess records a successful request
 func (cb *CircuitBreaker) RecordSuccess() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -102,7 +91,6 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	}
 }
 
-// RecordFailure records a failed request
 func (cb *CircuitBreaker) RecordFailure(customTimeout time.Duration) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -121,7 +109,6 @@ func (cb *CircuitBreaker) RecordFailure(customTimeout time.Duration) {
 	)
 
 	if cb.state == CircuitStateHalfOpen {
-		// HALF_OPEN 상태에서 실패하면 즉시 OPEN
 		cb.logger.Error("Circuit Breaker: Recovery failed, reopening circuit")
 		cb.transitionTo(CircuitStateOpen)
 		cb.nextRetryTime = time.Now().Add(timeout)
@@ -130,7 +117,6 @@ func (cb *CircuitBreaker) RecordFailure(customTimeout time.Duration) {
 			cb.nextHealthCheckTime = time.Now().Add(cb.healthCheckInterval)
 		}
 	} else if cb.failureCount >= cb.failureThreshold {
-		// 임계값 도달 시 OPEN
 		cb.logger.Error("Circuit Breaker: Threshold reached, OPENING circuit",
 			zap.Int("threshold", cb.failureThreshold),
 		)
@@ -143,7 +129,6 @@ func (cb *CircuitBreaker) RecordFailure(customTimeout time.Duration) {
 	}
 }
 
-// tryHealthCheck executes a health check asynchronously
 func (cb *CircuitBreaker) tryHealthCheck() {
 	cb.mu.Lock()
 	if cb.healthCheckFn == nil || cb.isHealthChecking {
@@ -155,7 +140,6 @@ func (cb *CircuitBreaker) tryHealthCheck() {
 
 	cb.logger.Info("Circuit Breaker: Running health check...")
 
-	// Run health check
 	isHealthy := cb.healthCheckFn()
 
 	cb.mu.Lock()
@@ -172,7 +156,6 @@ func (cb *CircuitBreaker) tryHealthCheck() {
 	}
 }
 
-// transitionTo changes the circuit state (internal, must be called with lock held)
 func (cb *CircuitBreaker) transitionTo(newState CircuitState) {
 	oldState := cb.state
 	cb.state = newState
@@ -190,7 +173,6 @@ func (cb *CircuitBreaker) transitionTo(newState CircuitState) {
 	)
 }
 
-// Reset manually resets the circuit breaker
 func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -201,7 +183,6 @@ func (cb *CircuitBreaker) Reset() {
 	cb.nextRetryTime = time.Time{}
 }
 
-// GetStatus returns the current status
 func (cb *CircuitBreaker) GetStatus() CircuitBreakerStatus {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
@@ -218,7 +199,6 @@ func (cb *CircuitBreaker) GetStatus() CircuitBreakerStatus {
 	return status
 }
 
-// CircuitBreakerStatus represents the circuit breaker status
 type CircuitBreakerStatus struct {
 	State         CircuitState
 	FailureCount  int

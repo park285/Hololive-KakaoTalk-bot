@@ -8,9 +8,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// NewLogger creates a new zap logger instance
 func NewLogger(level, logFile string) (*zap.Logger, error) {
-	// Parse log level
 	var zapLevel zapcore.Level
 	switch level {
 	case "debug":
@@ -25,7 +23,6 @@ func NewLogger(level, logFile string) (*zap.Logger, error) {
 		zapLevel = zapcore.InfoLevel
 	}
 
-	// Create log directory if it doesn't exist
 	if logFile != "" {
 		logDir := filepath.Dir(logFile)
 		if err := os.MkdirAll(logDir, 0755); err != nil {
@@ -33,13 +30,11 @@ func NewLogger(level, logFile string) (*zap.Logger, error) {
 		}
 	}
 
-	// Configure encoder with custom time format
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05")
 	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	encoderConfig.ConsoleSeparator = " | "
 
-	// File output only (파일 지정 시)
 	if logFile != "" {
 		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
@@ -56,7 +51,6 @@ func NewLogger(level, logFile string) (*zap.Logger, error) {
 		return logger, nil
 	}
 
-	// Console output only (파일 미지정 시)
 	consoleEncoder := zapcore.NewConsoleEncoder(encoderConfig)
 	core := zapcore.NewCore(
 		consoleEncoder,

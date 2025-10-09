@@ -12,7 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// CacheService provides Redis caching functionality
 type CacheService struct {
 	client *redis.Client
 	logger *zap.Logger
@@ -20,7 +19,6 @@ type CacheService struct {
 
 const memberHashKey = "hololive:members"
 
-// CacheConfig holds Redis configuration
 type CacheConfig struct {
 	Host     string
 	Port     int
@@ -28,7 +26,6 @@ type CacheConfig struct {
 	DB       int
 }
 
-// NewCacheService creates a new CacheService
 func NewCacheService(cfg CacheConfig, logger *zap.Logger) (*CacheService, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
@@ -41,7 +38,6 @@ func NewCacheService(cfg CacheConfig, logger *zap.Logger) (*CacheService, error)
 		PoolSize:     10,
 	})
 
-	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -60,7 +56,6 @@ func NewCacheService(cfg CacheConfig, logger *zap.Logger) (*CacheService, error)
 	}, nil
 }
 
-// Get retrieves and unmarshals a value from cache
 func (c *CacheService) Get(ctx context.Context, key string, dest any) error {
 	value, err := c.client.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -81,7 +76,6 @@ func (c *CacheService) Get(ctx context.Context, key string, dest any) error {
 	return nil
 }
 
-// Set marshals and stores a value in cache with optional TTL
 func (c *CacheService) Set(ctx context.Context, key string, value any, ttl time.Duration) error {
 	jsonData, err := json.Marshal(value)
 	if err != nil {
@@ -102,7 +96,6 @@ func (c *CacheService) Set(ctx context.Context, key string, value any, ttl time.
 	return nil
 }
 
-// Del deletes a key from cache
 func (c *CacheService) Del(ctx context.Context, key string) error {
 	if err := c.client.Del(ctx, key).Err(); err != nil {
 		c.logger.Error("Cache delete failed", zap.String("key", key), zap.Error(err))
@@ -111,7 +104,6 @@ func (c *CacheService) Del(ctx context.Context, key string) error {
 	return nil
 }
 
-// DelMany deletes multiple keys from cache
 func (c *CacheService) DelMany(ctx context.Context, keys []string) (int64, error) {
 	if len(keys) == 0 {
 		return 0, nil
@@ -126,7 +118,6 @@ func (c *CacheService) DelMany(ctx context.Context, keys []string) (int64, error
 	return deleted, nil
 }
 
-// Keys searches for keys matching a pattern
 func (c *CacheService) Keys(ctx context.Context, pattern string) ([]string, error) {
 	keys, err := c.client.Keys(ctx, pattern).Result()
 	if err != nil {
@@ -136,13 +127,11 @@ func (c *CacheService) Keys(ctx context.Context, pattern string) ([]string, erro
 	return keys, nil
 }
 
-// SAdd adds members to a set
 func (c *CacheService) SAdd(ctx context.Context, key string, members []string) (int64, error) {
 	if len(members) == 0 {
 		return 0, nil
 	}
 
-	// Convert []string to []any for variadic function
 	args := make([]any, len(members))
 	for i, m := range members {
 		args[i] = m
@@ -157,7 +146,6 @@ func (c *CacheService) SAdd(ctx context.Context, key string, members []string) (
 	return added, nil
 }
 
-// SRem removes members from a set
 func (c *CacheService) SRem(ctx context.Context, key string, members []string) (int64, error) {
 	if len(members) == 0 {
 		return 0, nil
@@ -177,7 +165,6 @@ func (c *CacheService) SRem(ctx context.Context, key string, members []string) (
 	return removed, nil
 }
 
-// SMembers returns all members of a set
 func (c *CacheService) SMembers(ctx context.Context, key string) ([]string, error) {
 	members, err := c.client.SMembers(ctx, key).Result()
 	if err != nil {
@@ -187,7 +174,6 @@ func (c *CacheService) SMembers(ctx context.Context, key string) ([]string, erro
 	return members, nil
 }
 
-// SIsMember checks if a member exists in a set
 func (c *CacheService) SIsMember(ctx context.Context, key, member string) (bool, error) {
 	exists, err := c.client.SIsMember(ctx, key, member).Result()
 	if err != nil {
@@ -197,7 +183,6 @@ func (c *CacheService) SIsMember(ctx context.Context, key, member string) (bool,
 	return exists, nil
 }
 
-// HSet sets a field in a hash
 func (c *CacheService) HSet(ctx context.Context, key, field, value string) error {
 	if err := c.client.HSet(ctx, key, field, value).Err(); err != nil {
 		c.logger.Error("Cache hset failed", zap.String("key", key), zap.String("field", field), zap.Error(err))
@@ -206,7 +191,6 @@ func (c *CacheService) HSet(ctx context.Context, key, field, value string) error
 	return nil
 }
 
-// HMSet sets multiple fields in a hash atomically
 func (c *CacheService) HMSet(ctx context.Context, key string, fields map[string]interface{}) error {
 	if len(fields) == 0 {
 		return nil
@@ -218,7 +202,6 @@ func (c *CacheService) HMSet(ctx context.Context, key string, fields map[string]
 	return nil
 }
 
-// HGet gets a field from a hash
 func (c *CacheService) HGet(ctx context.Context, key, field string) (string, error) {
 	value, err := c.client.HGet(ctx, key, field).Result()
 	if err == redis.Nil {
@@ -231,7 +214,6 @@ func (c *CacheService) HGet(ctx context.Context, key, field string) (string, err
 	return value, nil
 }
 
-// HGetAll gets all fields from a hash
 func (c *CacheService) HGetAll(ctx context.Context, key string) (map[string]string, error) {
 	values, err := c.client.HGetAll(ctx, key).Result()
 	if err != nil {
@@ -241,7 +223,6 @@ func (c *CacheService) HGetAll(ctx context.Context, key string) (map[string]stri
 	return values, nil
 }
 
-// Expire sets a TTL on a key
 func (c *CacheService) Expire(ctx context.Context, key string, ttl time.Duration) error {
 	if err := c.client.Expire(ctx, key, ttl).Err(); err != nil {
 		c.logger.Error("Cache expire failed", zap.String("key", key), zap.Error(err))
@@ -250,7 +231,6 @@ func (c *CacheService) Expire(ctx context.Context, key string, ttl time.Duration
 	return nil
 }
 
-// Exists checks if a key exists
 func (c *CacheService) Exists(ctx context.Context, key string) (bool, error) {
 	count, err := c.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -260,7 +240,6 @@ func (c *CacheService) Exists(ctx context.Context, key string) (bool, error) {
 	return count > 0, nil
 }
 
-// Close closes the Redis connection
 func (c *CacheService) Close() error {
 	if err := c.client.Close(); err != nil {
 		c.logger.Error("Failed to close Redis connection", zap.Error(err))
@@ -270,12 +249,10 @@ func (c *CacheService) Close() error {
 	return nil
 }
 
-// IsConnected checks if Redis is connected
 func (c *CacheService) IsConnected(ctx context.Context) bool {
 	return c.client.Ping(ctx).Err() == nil
 }
 
-// WaitUntilReady waits until Redis is ready
 func (c *CacheService) WaitUntilReady(ctx context.Context, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -295,7 +272,6 @@ func (c *CacheService) WaitUntilReady(ctx context.Context, timeout time.Duration
 	}
 }
 
-// InitializeMemberDatabase refreshes the member name → channel ID map in Redis.
 func (c *CacheService) InitializeMemberDatabase(ctx context.Context, memberData map[string]string) error {
 	if err := c.client.Del(ctx, memberHashKey).Err(); err != nil {
 		c.logger.Error("Failed to clear member database", zap.Error(err))
@@ -323,7 +299,6 @@ func (c *CacheService) InitializeMemberDatabase(ctx context.Context, memberData 
 	return nil
 }
 
-// GetMemberChannelID retrieves the cached channel ID for a member name.
 func (c *CacheService) GetMemberChannelID(ctx context.Context, memberName string) (string, error) {
 	if memberName == "" {
 		return "", nil
@@ -340,7 +315,6 @@ func (c *CacheService) GetMemberChannelID(ctx context.Context, memberName string
 	return value, nil
 }
 
-// GetAllMembers returns the full member map from Redis.
 func (c *CacheService) GetAllMembers(ctx context.Context) (map[string]string, error) {
 	values, err := c.client.HGetAll(ctx, memberHashKey).Result()
 	if err != nil {
@@ -350,7 +324,6 @@ func (c *CacheService) GetAllMembers(ctx context.Context) (map[string]string, er
 	return values, nil
 }
 
-// AddMember upserts a single member entry in the member cache.
 func (c *CacheService) AddMember(ctx context.Context, memberName, channelID string) error {
 	if memberName == "" || channelID == "" {
 		return fmt.Errorf("member name and channel ID must be provided")
@@ -367,7 +340,6 @@ func (c *CacheService) AddMember(ctx context.Context, memberName, channelID stri
 	return nil
 }
 
-// GetStreams retrieves a list of streams from cache
 func (c *CacheService) GetStreams(key string) ([]*domain.Stream, bool) {
 	ctx := context.Background()
 
@@ -384,7 +356,6 @@ func (c *CacheService) GetStreams(key string) ([]*domain.Stream, bool) {
 	return streams, true
 }
 
-// SetStreams stores a list of streams in cache with TTL
 func (c *CacheService) SetStreams(key string, streams []*domain.Stream, ttl time.Duration) {
 	ctx := context.Background()
 
@@ -392,3 +363,9 @@ func (c *CacheService) SetStreams(key string, streams []*domain.Stream, ttl time
 		c.logger.Error("Failed to cache streams", zap.String("key", key), zap.Error(err))
 	}
 }
+
+func (c *CacheService) GetRedisClient() *redis.Client {
+	return c.client
+}
+
+

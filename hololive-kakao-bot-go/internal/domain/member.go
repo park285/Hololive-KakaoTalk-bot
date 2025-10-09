@@ -94,3 +94,9 @@ func (md *MembersData) GetChannelIDs() []string {
 	}
 	return ids
 }
+
+func (md *MembersData) GetAllMembers() []*Member {
+	return md.Members
+}
+
+

@@ -2,8 +2,6 @@ package util
 
 import "strings"
 
-// TruncateString truncates a string to maxRunes characters (rune-based, not byte-based)
-// If truncated, appends "..." to the result
 func TruncateString(s string, maxRunes int) string {
 	runes := []rune(s)
 	if len(runes) <= maxRunes {
@@ -12,12 +10,27 @@ func TruncateString(s string, maxRunes int) string {
 	return string(runes[:maxRunes]) + "..."
 }
 
-// Normalize performs basic string normalization (lowercase + trim)
 func Normalize(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
-// NormalizeKey normalizes a name for use as a lookup key by removing special characters
+// NormalizeSuffix removes common Korean suffixes (짱, 쨩) after normalization
+func NormalizeSuffix(s string) string {
+	normalized := Normalize(s)
+
+	// Remove "짱" suffix
+	if strings.HasSuffix(normalized, "짱") {
+		return normalized[:len(normalized)-len("짱")]
+	}
+
+	// Remove "쨩" suffix
+	if strings.HasSuffix(normalized, "쨩") {
+		return normalized[:len(normalized)-len("쨩")]
+	}
+
+	return normalized
+}
+
 func NormalizeKey(name string) string {
 	name = Normalize(name)
 	if name == "" {
@@ -36,7 +49,6 @@ func NormalizeKey(name string) string {
 	return builder.String()
 }
 
-// Slugify converts a name to URL-friendly slug format
 func Slugify(name string) string {
 	name = Normalize(name)
 	name = strings.ReplaceAll(name, " ", "-")
@@ -46,7 +58,6 @@ func Slugify(name string) string {
 	return name
 }
 
-// Contains checks if a string slice contains a specific item
 func Contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {

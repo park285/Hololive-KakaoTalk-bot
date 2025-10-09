@@ -13,7 +13,6 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-// YouTubeService provides backup access to YouTube Data API v3
 // WARNING: This is a BACKUP service due to strict quota limits
 type YouTubeService struct {
 	service    *youtube.Service
@@ -25,18 +24,15 @@ type YouTubeService struct {
 }
 
 const (
-	// YouTube Data API quota limits (per day)
 	dailyQuotaLimit   = 10000
 	searchQuotaCost   = 100 // search.list cost
 	channelsQuotaCost = 1   // channels.list cost
 
-	// Conservative limits for backup usage
-	maxChannelsPerCall = 20              // Max 2000 units per call
-	quotaSafetyMargin  = 2000            // Reserve 2000 units
-	cacheExpiration    = 2 * time.Hour   // Cache for 2 hours
+	maxChannelsPerCall = 20            // Max 2000 units per call
+	quotaSafetyMargin  = 2000          // Reserve 2000 units
+	cacheExpiration    = 2 * time.Hour // Cache for 2 hours
 )
 
-// NewYouTubeService creates a YouTube API backup service with quota management
 func NewYouTubeService(apiKey string, cache *CacheService, logger *zap.Logger) (*YouTubeService, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("YouTube API key is required")
@@ -62,7 +58,6 @@ func NewYouTubeService(apiKey string, cache *CacheService, logger *zap.Logger) (
 	return ys, nil
 }
 
-// getNextQuotaReset calculates next quota reset time (midnight Pacific Time)
 func getNextQuotaReset() time.Time {
 	pt, _ := time.LoadLocation("America/Los_Angeles")
 	now := time.Now().In(pt)
@@ -70,12 +65,10 @@ func getNextQuotaReset() time.Time {
 	return next
 }
 
-// checkQuota verifies if we have enough quota for the operation
 func (ys *YouTubeService) checkQuota(cost int) error {
 	ys.quotaMu.Lock()
 	defer ys.quotaMu.Unlock()
 
-	// Auto-reset quota if new day
 	now := time.Now()
 	if now.After(ys.quotaReset) {
 		ys.quotaUsed = 0
@@ -84,7 +77,6 @@ func (ys *YouTubeService) checkQuota(cost int) error {
 			zap.Time("nextReset", ys.quotaReset))
 	}
 
-	// Check if we have enough quota (with safety margin)
 	if ys.quotaUsed+cost > (dailyQuotaLimit - quotaSafetyMargin) {
 		return &QuotaExceededError{
 			Used:      ys.quotaUsed,
@@ -97,7 +89,6 @@ func (ys *YouTubeService) checkQuota(cost int) error {
 	return nil
 }
 
-// consumeQuota marks quota as used after successful API call
 func (ys *YouTubeService) consumeQuota(cost int) {
 	ys.quotaMu.Lock()
 	defer ys.quotaMu.Unlock()
@@ -111,7 +102,6 @@ func (ys *YouTubeService) consumeQuota(cost int) {
 		zap.Int("remaining", remaining),
 		zap.Float64("usagePercent", float64(ys.quotaUsed)/float64(dailyQuotaLimit)*100))
 
-	// Warn if quota usage is high
 	if remaining < quotaSafetyMargin {
 		ys.logger.Warn("YouTube API quota running low",
 			zap.Int("remaining", remaining),
@@ -119,10 +109,7 @@ func (ys *YouTubeService) consumeQuota(cost int) {
 	}
 }
 
-// GetUpcomingStreams fetches upcoming streams for SELECTED channels only
-// This is a BACKUP method - use sparingly due to quota limits
 func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []string) ([]*domain.Stream, error) {
-	// Limit channel count to conserve quota
 	if len(channelIDs) > maxChannelsPerCall {
 		ys.logger.Warn("Too many channels requested, limiting to max",
 			zap.Int("requested", len(channelIDs)),
@@ -130,7 +117,6 @@ func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []s
 		channelIDs = channelIDs[:maxChannelsPerCall]
 	}
 
-	// Check cache first
 	cacheKey := fmt.Sprintf("youtube:upcoming:%d", len(channelIDs))
 	if cached, found := ys.cache.GetStreams(cacheKey); found {
 		ys.logger.Debug("YouTube cache hit (backup avoided)",
@@ -138,7 +124,6 @@ func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []s
 		return cached, nil
 	}
 
-	// Check quota BEFORE making API calls
 	estimatedCost := len(channelIDs) * searchQuotaCost
 	if err := ys.checkQuota(estimatedCost); err != nil {
 		return nil, err
@@ -153,7 +138,6 @@ func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []s
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(channelIDs))
 
-	// Fetch with concurrency limit (max 3 concurrent to avoid rate limit)
 	semaphore := make(chan struct{}, 3)
 
 	actualCost := 0
@@ -185,10 +169,8 @@ func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []s
 	wg.Wait()
 	close(errChan)
 
-	// Consume actual quota used
 	ys.consumeQuota(actualCost)
 
-	// Collect errors (if any)
 	var errors []error
 	for err := range errChan {
 		errors = append(errors, err)
@@ -198,14 +180,12 @@ func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []s
 		ys.logger.Warn("Some YouTube API calls failed",
 			zap.Int("failures", len(errors)),
 			zap.Int("successes", len(channelIDs)-len(errors)))
-		// Continue with partial results
 	}
 
 	if len(allStreams) == 0 && len(errors) > 0 {
 		return nil, fmt.Errorf("all YouTube API calls failed: %d errors", len(errors))
 	}
 
-	// Cache successful results
 	ys.cache.SetStreams(cacheKey, allStreams, cacheExpiration)
 
 	ys.logger.Info("YouTube API backup completed",
@@ -216,7 +196,6 @@ func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []s
 	return allStreams, nil
 }
 
-// getChannelUpcomingStreams fetches upcoming streams for a single channel
 func (ys *YouTubeService) getChannelUpcomingStreams(ctx context.Context, channelID string) ([]*domain.Stream, error) {
 	call := ys.service.Search.List([]string{"snippet"}).
 		ChannelId(channelID).
@@ -255,14 +234,12 @@ func (ys *YouTubeService) getChannelUpcomingStreams(ctx context.Context, channel
 			Thumbnail: extractThumbnail(item.Snippet.Thumbnails),
 		}
 
-		// Parse scheduled start time
 		if item.Snippet.PublishedAt != "" {
 			if startTime, err := time.Parse(time.RFC3339, item.Snippet.PublishedAt); err == nil {
 				stream.StartScheduled = &startTime
 			}
 		}
 
-		// Add channel info
 		if item.Snippet.ChannelTitle != "" {
 			stream.Channel = &domain.Channel{
 				ID:   channelID,
@@ -276,13 +253,11 @@ func (ys *YouTubeService) getChannelUpcomingStreams(ctx context.Context, channel
 	return streams, nil
 }
 
-// extractThumbnail gets the best quality thumbnail URL
 func extractThumbnail(thumbnails *youtube.ThumbnailDetails) *string {
 	if thumbnails == nil {
 		return nil
 	}
 
-	// Try from highest to lowest quality
 	if thumbnails.Maxres != nil && thumbnails.Maxres.Url != "" {
 		return &thumbnails.Maxres.Url
 	}
@@ -299,12 +274,10 @@ func extractThumbnail(thumbnails *youtube.ThumbnailDetails) *string {
 	return nil
 }
 
-// GetQuotaStatus returns current quota usage information
 func (ys *YouTubeService) GetQuotaStatus() (used int, remaining int, resetTime time.Time) {
 	ys.quotaMu.Lock()
 	defer ys.quotaMu.Unlock()
 
-	// Check if quota reset occurred
 	if time.Now().After(ys.quotaReset) {
 		return 0, dailyQuotaLimit, getNextQuotaReset()
 	}
@@ -312,14 +285,12 @@ func (ys *YouTubeService) GetQuotaStatus() (used int, remaining int, resetTime t
 	return ys.quotaUsed, dailyQuotaLimit - ys.quotaUsed, ys.quotaReset
 }
 
-// IsQuotaAvailable checks if YouTube API can be used (has sufficient quota)
 func (ys *YouTubeService) IsQuotaAvailable(channelCount int) bool {
 	estimatedCost := channelCount * searchQuotaCost
 	err := ys.checkQuota(estimatedCost)
 	return err == nil
 }
 
-// QuotaExceededError represents a quota limit error
 type QuotaExceededError struct {
 	Used      int
 	Limit     int
@@ -336,13 +307,11 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-// GetChannelStatistics fetches channel statistics (1 unit per channel)
 func (ys *YouTubeService) GetChannelStatistics(ctx context.Context, channelIDs []string) (map[string]*ChannelStats, error) {
 	if len(channelIDs) == 0 {
 		return make(map[string]*ChannelStats), nil
 	}
 
-	// Check quota
 	cost := len(channelIDs)
 	if err := ys.checkQuota(cost); err != nil {
 		return nil, err
@@ -350,7 +319,6 @@ func (ys *YouTubeService) GetChannelStatistics(ctx context.Context, channelIDs [
 
 	result := make(map[string]*ChannelStats)
 
-	// YouTube allows up to 50 channels per request
 	batchSize := 50
 	for i := 0; i < len(channelIDs); i += batchSize {
 		end := i + batchSize
@@ -384,7 +352,6 @@ func (ys *YouTubeService) GetChannelStatistics(ctx context.Context, channelIDs [
 		}
 	}
 
-	// Consume quota
 	ys.consumeQuota(cost)
 
 	ys.logger.Info("Channel statistics fetched",
@@ -395,9 +362,7 @@ func (ys *YouTubeService) GetChannelStatistics(ctx context.Context, channelIDs [
 	return result, nil
 }
 
-// GetRecentVideos fetches recent uploads for a channel (100 units)
 func (ys *YouTubeService) GetRecentVideos(ctx context.Context, channelID string, maxResults int64) ([]string, error) {
-	// Check quota
 	if err := ys.checkQuota(searchQuotaCost); err != nil {
 		return nil, err
 	}
@@ -423,7 +388,6 @@ func (ys *YouTubeService) GetRecentVideos(ctx context.Context, channelID string,
 		}
 	}
 
-	// Consume quota
 	ys.consumeQuota(searchQuotaCost)
 
 	ys.logger.Debug("Recent videos fetched",
@@ -433,7 +397,6 @@ func (ys *YouTubeService) GetRecentVideos(ctx context.Context, channelID string,
 	return videoIDs, nil
 }
 
-// ChannelStats represents YouTube channel statistics
 type ChannelStats struct {
 	ChannelID       string
 	ChannelTitle    string

@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
+	"github.com/kapu/hololive-kakao-bot-go/internal/util"
 	"go.uber.org/zap"
 )
 
@@ -65,7 +66,7 @@ func (c *AskCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext,
 
 	commands := parseResults.GetCommands()
 	if len(commands) == 0 {
-		if c.tryMemberInfoFallback(ctx, cmdCtx, question) {
+		if c.tryMemberInfo(ctx, cmdCtx, question) {
 			return nil
 		}
 		return c.deps.SendMessage(cmdCtx.Room, "요청을 이해하지 못했습니다. ❓지원하지 않는 명령어입니다. !도움말 명령어를 참고해주세요.")
@@ -105,7 +106,7 @@ func (c *AskCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext,
 	}
 
 	if len(validResults) == 0 {
-		if c.tryMemberInfoFallback(ctx, cmdCtx, question) {
+		if c.tryMemberInfo(ctx, cmdCtx, question) {
 			return nil
 		}
 		return c.deps.SendMessage(cmdCtx.Room, "요청을 이해하지 못했습니다. ❓지원하지 않는 명령어입니다. !도움말 명령어를 참고해주세요.")
@@ -135,7 +136,7 @@ func (c *AskCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext,
 	}
 
 	if executed == 0 {
-		if c.tryMemberInfoFallback(ctx, cmdCtx, question) {
+		if c.tryMemberInfo(ctx, cmdCtx, question) {
 			return nil
 		}
 		return c.deps.SendMessage(cmdCtx.Room, "요청을 이해하지 못했습니다. ❓지원하지 않는 명령어입니다. !도움말 명령어를 참고해주세요.")
@@ -153,12 +154,11 @@ func (c *AskCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext,
 	return nil
 }
 
-func (c *AskCommand) tryMemberInfoFallback(ctx context.Context, cmdCtx *domain.CommandContext, question string) bool {
+func (c *AskCommand) tryMemberInfo(ctx context.Context, cmdCtx *domain.CommandContext, question string) bool {
 	if c.deps == nil || c.deps.Matcher == nil || c.deps.ExecuteCommand == nil {
 		return false
 	}
 
-	// [1차] 멤버 찾기를 최우선으로 실행 (shouldFallback 이전으로 이동)
 	channel, err := c.deps.Matcher.FindBestMatch(ctx, question)
 	var member *domain.Member
 	if err == nil && channel != nil {
@@ -166,14 +166,12 @@ func (c *AskCommand) tryMemberInfoFallback(ctx context.Context, cmdCtx *domain.C
 	}
 
 	if member == nil {
-		member = c.findMemberInQuestion(question)
+		member = c.findMember(question)
 	}
 
-	// 멤버를 찾았으면 즉시 member-info 실행
 	if member != nil {
 		channelID := member.ChannelID
 		if channel == nil && channelID != "" {
-			// Try to fetch channel information lazily if matcher failed but we found member.
 			if fetched, fetchErr := c.deps.Matcher.FindBestMatch(ctx, member.Name); fetchErr == nil && fetched != nil {
 				channelID = fetched.ID
 			}
@@ -196,8 +194,7 @@ func (c *AskCommand) tryMemberInfoFallback(ctx context.Context, cmdCtx *domain.C
 					zap.Error(err),
 				)
 			}
-			// member-info 실행 실패 시에도 명확화 시도
-			return c.handleMemberFallbackFailure(ctx, cmdCtx, question)
+			return c.handleFallbackFail(ctx, cmdCtx, question)
 		}
 
 		if c.deps.Logger != nil {
@@ -210,9 +207,7 @@ func (c *AskCommand) tryMemberInfoFallback(ctx context.Context, cmdCtx *domain.C
 		return true
 	}
 
-	// [2차] 멤버 없을 때 명확화 로직 (shouldFallback 제거)
-	// shouldFallback 체크 없이 바로 명확화 메시지 처리
-	if c.handleMemberFallbackFailure(ctx, cmdCtx, question) {
+	if c.handleFallbackFail(ctx, cmdCtx, question) {
 		return true
 	}
 	return false
@@ -231,7 +226,7 @@ func hasExplicitMemberInfoKeyword(question string) bool {
 }
 
 func normalizeForMemberInfoIntent(input string) string {
-	lower := strings.ToLower(strings.TrimSpace(input))
+	lower := util.Normalize(input)
 	var builder strings.Builder
 	builder.Grow(len(lower))
 
@@ -270,14 +265,14 @@ var memberInfoKeywordTokens = []string{
 	"정체",
 }
 
-func (c *AskCommand) findMemberInQuestion(question string) *domain.Member {
+func (c *AskCommand) findMember(question string) *domain.Member {
 	if c.deps == nil || c.deps.MembersData == nil {
 		return nil
 	}
 
 	lower := strings.ToLower(question)
 
-	for _, member := range c.deps.MembersData.Members {
+	for _, member := range c.deps.MembersData.GetAllMembers() {
 		if member == nil {
 			continue
 		}
@@ -303,7 +298,7 @@ func (c *AskCommand) findMemberInQuestion(question string) *domain.Member {
 	return nil
 }
 
-func (c *AskCommand) handleMemberFallbackFailure(ctx context.Context, cmdCtx *domain.CommandContext, question string) bool {
+func (c *AskCommand) handleFallbackFail(ctx context.Context, cmdCtx *domain.CommandContext, question string) bool {
 	if c.deps == nil || c.deps.SendMessage == nil {
 		return false
 	}
@@ -311,7 +306,6 @@ func (c *AskCommand) handleMemberFallbackFailure(ctx context.Context, cmdCtx *do
 	sanitizedQuestion := strings.TrimSpace(question)
 	var clarification string
 
-	// Try GenerateSmartClarification for Hololive-aware response
 	if c.deps.Gemini != nil && c.deps.MembersData != nil {
 		response, metadata, err := c.deps.Gemini.GenerateSmartClarification(ctx, sanitizedQuestion, c.deps.MembersData)
 		if err == nil && response != nil {
@@ -325,12 +319,10 @@ func (c *AskCommand) handleMemberFallbackFailure(ctx context.Context, cmdCtx *do
 				)
 			}
 
-			// If not Hololive-related, don't send clarification message
 			if !response.IsHololiveRelated {
 				return false
 			}
 
-			// Use the smart clarification message
 			if strings.TrimSpace(response.Message) != "" {
 				clarification = strings.TrimSpace(response.Message)
 			}
@@ -342,7 +334,6 @@ func (c *AskCommand) handleMemberFallbackFailure(ctx context.Context, cmdCtx *do
 		}
 	}
 
-	// Fallback to basic clarification if smart clarification failed
 	if clarification == "" {
 		escaped := strings.ReplaceAll(sanitizedQuestion, `"`, "'")
 		clarification = fmt.Sprintf("누구를 말씀하신 건지 잘 모르겠어요. \"%s\"를 말씀하신 건가요? 홀로라이브 소속이 맞는지 확인하신 뒤 다시 질문해 주세요.", escaped)

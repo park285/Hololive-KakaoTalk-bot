@@ -17,20 +17,18 @@ const (
 	maxPromptDataEntries      = 10
 )
 
-// OfficialProfileService serves pre-fetched official talent profiles and manages translations.
-type OfficialProfileService struct {
+type ProfileService struct {
 	cache         *CacheService
 	modelManager  *ModelManager
 	logger        *zap.Logger
-	membersData   *domain.MembersData
+	membersData   domain.MemberDataProvider
 	profiles      map[string]*domain.TalentProfile // slug -> profile
-	translations  map[string]*domain.TranslatedTalentProfile
+	translations  map[string]*domain.Translated
 	englishToSlug map[string]string
 	channelToSlug map[string]string
 }
 
-// NewOfficialProfileService creates a new OfficialProfileService from embedded datasets.
-func NewOfficialProfileService(cache *CacheService, membersData *domain.MembersData, modelManager *ModelManager, logger *zap.Logger) (*OfficialProfileService, error) {
+func NewProfileService(cache *CacheService, membersData domain.MemberDataProvider, modelManager *ModelManager, logger *zap.Logger) (*ProfileService, error) {
 	if membersData == nil {
 		return nil, fmt.Errorf("members data is nil")
 	}
@@ -38,17 +36,17 @@ func NewOfficialProfileService(cache *CacheService, membersData *domain.MembersD
 		logger = zap.NewNop()
 	}
 
-	profiles, err := domain.LoadOfficialProfiles()
+	profiles, err := domain.LoadProfiles()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load official profiles dataset: %w", err)
 	}
 
-	preTranslated, err := domain.LoadOfficialTranslatedProfiles()
+	preTranslated, err := domain.LoadTranslated()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load translated profiles dataset: %w", err)
 	}
 
-	service := &OfficialProfileService{
+	service := &ProfileService{
 		cache:         cache,
 		modelManager:  modelManager,
 		logger:        logger,
@@ -56,7 +54,7 @@ func NewOfficialProfileService(cache *CacheService, membersData *domain.MembersD
 		profiles:      profiles,
 		translations:  preTranslated,
 		englishToSlug: make(map[string]string, len(profiles)),
-		channelToSlug: make(map[string]string, len(membersData.Members)),
+		channelToSlug: make(map[string]string, len(membersData.GetAllMembers())),
 	}
 
 	for slug, profile := range profiles {
@@ -69,24 +67,22 @@ func NewOfficialProfileService(cache *CacheService, membersData *domain.MembersD
 		}
 	}
 
-	for _, member := range membersData.Members {
+	for _, member := range membersData.GetAllMembers() {
 		if member == nil {
 			continue
 		}
-		// Prefer direct mapping from dataset if available
-		if slug, ok := service.slugForEnglishName(member.Name); ok {
+		if slug, ok := service.slugFor(member.Name); ok {
 			service.channelToSlug[strings.ToLower(member.ChannelID)] = slug
 			continue
 		}
 
-		// Attempt to derive slug from known link
 		key := util.NormalizeKey(member.Name)
 		if key != "" {
 			service.englishToSlug[key] = util.Slugify(member.Name)
 		}
 	}
 
-	logger.Info("OfficialProfileService initialized",
+	logger.Info("ProfileService initialized",
 		zap.Int("profiles", len(service.profiles)),
 		zap.Int("translated_profiles", len(service.translations)),
 		zap.Int("index_english", len(service.englishToSlug)),
@@ -96,18 +92,17 @@ func NewOfficialProfileService(cache *CacheService, membersData *domain.MembersD
 	return service, nil
 }
 
-// GetProfileWithTranslation returns the static raw profile and a translated version for a given English name.
-func (s *OfficialProfileService) GetProfileWithTranslation(ctx context.Context, englishName string) (*domain.TalentProfile, *domain.TranslatedTalentProfile, error) {
+func (s *ProfileService) GetWithTranslation(ctx context.Context, englishName string) (*domain.TalentProfile, *domain.Translated, error) {
 	if strings.TrimSpace(englishName) == "" {
 		return nil, nil, fmt.Errorf("멤버 이름이 필요합니다.")
 	}
 
-	profile, err := s.GetRawProfileByEnglish(englishName)
+	profile, err := s.GetByEnglish(englishName)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	translated, err := s.getTranslatedProfile(ctx, profile)
+	translated, err := s.getTranslated(ctx, profile)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -115,16 +110,14 @@ func (s *OfficialProfileService) GetProfileWithTranslation(ctx context.Context, 
 	return profile, translated, nil
 }
 
-// GetRawProfileByEnglish looks up a profile by the official English name.
-func (s *OfficialProfileService) GetRawProfileByEnglish(englishName string) (*domain.TalentProfile, error) {
-	if profile, ok := s.profileByEnglish(englishName); ok {
+func (s *ProfileService) GetByEnglish(englishName string) (*domain.TalentProfile, error) {
+	if profile, ok := s.byEnglish(englishName); ok {
 		return profile, nil
 	}
 	return nil, fmt.Errorf("'%s' 멤버의 공식 프로필 정보를 찾을 수 없습니다.", englishName)
 }
 
-// GetRawProfileByChannelID retrieves a profile using a Holodex channel ID.
-func (s *OfficialProfileService) GetRawProfileByChannelID(channelID string) (*domain.TalentProfile, error) {
+func (s *ProfileService) GetByChannel(channelID string) (*domain.TalentProfile, error) {
 	if channelID == "" {
 		return nil, fmt.Errorf("channel id is empty")
 	}
@@ -139,8 +132,8 @@ func (s *OfficialProfileService) GetRawProfileByChannelID(channelID string) (*do
 	return profile, nil
 }
 
-func (s *OfficialProfileService) profileByEnglish(englishName string) (*domain.TalentProfile, bool) {
-	slug, ok := s.slugForEnglishName(englishName)
+func (s *ProfileService) byEnglish(englishName string) (*domain.TalentProfile, bool) {
+	slug, ok := s.slugFor(englishName)
 	if !ok {
 		return nil, false
 	}
@@ -151,7 +144,7 @@ func (s *OfficialProfileService) profileByEnglish(englishName string) (*domain.T
 	return profile, true
 }
 
-func (s *OfficialProfileService) slugForEnglishName(name string) (string, bool) {
+func (s *ProfileService) slugFor(name string) (string, bool) {
 	key := util.NormalizeKey(name)
 	if key == "" {
 		return "", false
@@ -160,7 +153,7 @@ func (s *OfficialProfileService) slugForEnglishName(name string) (string, bool) 
 	return slug, ok
 }
 
-func (s *OfficialProfileService) getTranslatedProfile(ctx context.Context, raw *domain.TalentProfile) (*domain.TranslatedTalentProfile, error) {
+func (s *ProfileService) getTranslated(ctx context.Context, raw *domain.TalentProfile) (*domain.Translated, error) {
 	if raw == nil {
 		return nil, fmt.Errorf("raw profile is nil")
 	}
@@ -168,7 +161,7 @@ func (s *OfficialProfileService) getTranslatedProfile(ctx context.Context, raw *
 	cacheKey := fmt.Sprintf(cacheKeyProfileTranslated, translationLocale, raw.Slug)
 
 	if s.cache != nil {
-		var cached domain.TranslatedTalentProfile
+		var cached domain.Translated
 		if err := s.cache.Get(ctx, cacheKey, &cached); err == nil && cached.DisplayName != "" {
 			return &cached, nil
 		}
@@ -191,7 +184,7 @@ func (s *OfficialProfileService) getTranslatedProfile(ctx context.Context, raw *
 		return nil, fmt.Errorf("AI 번역 서비스가 설정되지 않았습니다.")
 	}
 
-	promptText, err := prompt.BuildProfileTranslationPrompt(prompt.ProfileTranslationPromptVars{
+	promptText, err := prompt.BuildTranslate(prompt.TranslateVars{
 		EnglishName:    raw.EnglishName,
 		JapaneseName:   raw.JapaneseName,
 		Catchphrase:    raw.Catchphrase,
@@ -203,7 +196,7 @@ func (s *OfficialProfileService) getTranslatedProfile(ctx context.Context, raw *
 		return nil, fmt.Errorf("번역 프롬프트 생성 실패: %w", err)
 	}
 
-	var translated domain.TranslatedTalentProfile
+	var translated domain.Translated
 	metadata, genErr := s.modelManager.GenerateJSON(ctx, promptText, PresetBalanced, &translated, nil)
 	if genErr != nil {
 		return nil, fmt.Errorf("번역 생성 실패: %w", genErr)
@@ -228,7 +221,7 @@ func (s *OfficialProfileService) getTranslatedProfile(ctx context.Context, raw *
 	cloned := cloneTranslatedProfile(&translated)
 	if cloned != nil {
 		if s.translations == nil {
-			s.translations = make(map[string]*domain.TranslatedTalentProfile)
+			s.translations = make(map[string]*domain.Translated)
 		}
 		s.translations[raw.Slug] = cloned
 	}
@@ -236,19 +229,19 @@ func (s *OfficialProfileService) getTranslatedProfile(ctx context.Context, raw *
 	return cloned, nil
 }
 
-func convertToPromptEntries(entries []domain.TalentProfileEntry) []prompt.ProfileTranslationPromptEntry {
+func convertToPromptEntries(entries []domain.TalentProfileEntry) []prompt.TranslateEntry {
 	if len(entries) == 0 {
-		return []prompt.ProfileTranslationPromptEntry{}
+		return []prompt.TranslateEntry{}
 	}
 
-	result := make([]prompt.ProfileTranslationPromptEntry, 0, len(entries))
+	result := make([]prompt.TranslateEntry, 0, len(entries))
 	for _, entry := range entries {
 		label := strings.TrimSpace(entry.Label)
 		value := strings.TrimSpace(entry.Value)
 		if label == "" || value == "" {
 			continue
 		}
-		result = append(result, prompt.ProfileTranslationPromptEntry{
+		result = append(result, prompt.TranslateEntry{
 			Label: label,
 			Value: value,
 		})
@@ -256,8 +249,7 @@ func convertToPromptEntries(entries []domain.TalentProfileEntry) []prompt.Profil
 	return result
 }
 
-// PreloadTranslations writes pre-translated profiles into cache so first access is instant.
-func (s *OfficialProfileService) PreloadTranslations(ctx context.Context) {
+func (s *ProfileService) PreloadTranslations(ctx context.Context) {
 	if s == nil || s.cache == nil || len(s.translations) == 0 {
 		return
 	}
@@ -283,7 +275,7 @@ func (s *OfficialProfileService) PreloadTranslations(ctx context.Context) {
 	}
 }
 
-func cloneTranslatedProfile(src *domain.TranslatedTalentProfile) *domain.TranslatedTalentProfile {
+func cloneTranslatedProfile(src *domain.Translated) *domain.Translated {
 	if src == nil {
 		return nil
 	}

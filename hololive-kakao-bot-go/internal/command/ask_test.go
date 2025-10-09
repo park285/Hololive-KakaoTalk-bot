@@ -37,21 +37,21 @@ func (f *fakeParser) GenerateClarificationMessage(_ context.Context, _ string) (
 	return "", nil, nil
 }
 
-func (f *fakeParser) ClassifyMemberInfoIntent(_ context.Context, _ string) (*domain.MemberIntentClassification, *service.GenerateMetadata, error) {
+func (f *fakeParser) ClassifyMemberInfoIntent(_ context.Context, _ string) (*domain.MemberIntent, *service.GenerateMetadata, error) {
 	// Return non-member-info intent by default
-	return &domain.MemberIntentClassification{
-		Intent: domain.MemberIntentOther,
+	return &domain.MemberIntent{
+		Intent:     domain.MemberIntentOther,
 		Confidence: 0.9,
-		Reasoning: "test mock",
+		Reasoning:  "test mock",
 	}, nil, nil
 }
 
-func (f *fakeParser) GenerateSmartClarification(_ context.Context, _ string, _ *domain.MembersData) (*domain.SmartClarificationResponse, *service.GenerateMetadata, error) {
+func (f *fakeParser) GenerateSmartClarification(_ context.Context, _ string, _ *domain.MembersData) (*domain.Clarification, *service.GenerateMetadata, error) {
 	// Return non-hololive-related by default
-	return &domain.SmartClarificationResponse{
+	return &domain.Clarification{
 		IsHololiveRelated: false,
-		Message: "",
-		Candidate: "",
+		Message:           "",
+		Candidate:         "",
 	}, nil, nil
 }
 
@@ -309,7 +309,7 @@ func TestHandleMemberFallbackFailurePrefersLLMMessage(t *testing.T) {
 	}
 
 	cmd := NewAskCommand(deps)
-	ok := cmd.handleMemberFallbackFailure(context.Background(), domain.NewCommandContext("room", "room", "user", "!ask", false), "하짱 알려줘")
+	ok := cmd.handleFallbackFail(context.Background(), domain.NewCommandContext("room", "room", "user", "!ask", false), "하짱 알려줘")
 	if !ok {
 		t.Fatalf("expected clarification handler to succeed")
 	}
@@ -335,7 +335,7 @@ func TestHandleMemberFallbackFailureFallsBackToTemplate(t *testing.T) {
 	}
 
 	cmd := NewAskCommand(deps)
-	ok := cmd.handleMemberFallbackFailure(context.Background(), domain.NewCommandContext("room", "room", "user", "!ask", false), `하 "짱" 알려줘`)
+	ok := cmd.handleFallbackFail(context.Background(), domain.NewCommandContext("room", "room", "user", "!ask", false), `하 "짱" 알려줘`)
 	if !ok {
 		t.Fatalf("expected clarification handler to succeed with template fallback")
 	}

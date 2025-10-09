@@ -9,18 +9,15 @@ import (
 	"github.com/kapu/hololive-kakao-bot-go/internal/util"
 )
 
-// AlarmListEntry represents a single alarm item for formatting.
 type AlarmListEntry struct {
 	MemberName string
 	NextStream string
 }
 
-// ResponseFormatter formats bot responses
 type ResponseFormatter struct {
 	prefix string
 }
 
-// NewResponseFormatter creates a new ResponseFormatter
 func NewResponseFormatter(prefix string) *ResponseFormatter {
 	if strings.TrimSpace(prefix) == "" {
 		prefix = "!"
@@ -28,7 +25,6 @@ func NewResponseFormatter(prefix string) *ResponseFormatter {
 	return &ResponseFormatter{prefix: prefix}
 }
 
-// FormatLiveStreams formats live streams into a message
 func (f *ResponseFormatter) FormatLiveStreams(streams []*domain.Stream) string {
 	if len(streams) == 0 {
 		return "🔴 현재 방송 중인 스트림이 없습니다."
@@ -56,7 +52,6 @@ func (f *ResponseFormatter) FormatLiveStreams(streams []*domain.Stream) string {
 	return sb.String()
 }
 
-// FormatUpcomingStreams formats upcoming streams into a message
 func (f *ResponseFormatter) FormatUpcomingStreams(streams []*domain.Stream, hours int) string {
 	if len(streams) == 0 {
 		return fmt.Sprintf("📅 %d시간 이내 예정된 방송이 없습니다.", hours)
@@ -86,7 +81,6 @@ func (f *ResponseFormatter) FormatUpcomingStreams(streams []*domain.Stream, hour
 	return sb.String()
 }
 
-// FormatChannelSchedule formats channel schedule into a message
 func (f *ResponseFormatter) FormatChannelSchedule(channel *domain.Channel, streams []*domain.Stream, days int) string {
 	if channel == nil {
 		return "❌ 채널 정보를 찾을 수 없습니다."
@@ -131,7 +125,6 @@ func (f *ResponseFormatter) FormatChannelSchedule(channel *domain.Channel, strea
 	return sb.String()
 }
 
-// FormatAlarmAdded formats alarm added confirmation
 func (f *ResponseFormatter) FormatAlarmAdded(memberName string, added bool, nextStreamInfo string) string {
 	if !added {
 		return fmt.Sprintf("ℹ️ %s 알람이 이미 설정되어 있습니다.", memberName)
@@ -151,7 +144,6 @@ func (f *ResponseFormatter) FormatAlarmAdded(memberName string, added bool, next
 	return sb.String()
 }
 
-// FormatAlarmRemoved formats alarm removed confirmation
 func (f *ResponseFormatter) FormatAlarmRemoved(memberName string, removed bool) string {
 	if removed {
 		return fmt.Sprintf("✅ %s 알람이 해제되었습니다.", memberName)
@@ -159,7 +151,6 @@ func (f *ResponseFormatter) FormatAlarmRemoved(memberName string, removed bool) 
 	return fmt.Sprintf("❌ %s 알람이 설정되어 있지 않습니다.", memberName)
 }
 
-// FormatAlarmList formats user's alarm list
 func (f *ResponseFormatter) FormatAlarmList(alarms []AlarmListEntry) string {
 	if len(alarms) == 0 {
 		return fmt.Sprintf("🔔 설정된 알람이 없습니다.\n\n💡 사용법:\n%s알람 추가 [멤버명]\n예) %s알람 추가 페코라\n예) %s알람 추가 미코",
@@ -181,7 +172,6 @@ func (f *ResponseFormatter) FormatAlarmList(alarms []AlarmListEntry) string {
 	return strings.TrimSuffix(sb.String(), "\n")
 }
 
-// FormatAlarmCleared formats all alarms cleared confirmation
 func (f *ResponseFormatter) FormatAlarmCleared(count int) string {
 	if count == 0 {
 		return "설정된 알람이 없습니다."
@@ -189,7 +179,6 @@ func (f *ResponseFormatter) FormatAlarmCleared(count int) string {
 	return fmt.Sprintf("✅ %d개의 알람이 모두 해제되었습니다.", count)
 }
 
-// FormatAlarmNotification formats alarm notification message
 func (f *ResponseFormatter) FormatAlarmNotification(channel *domain.Channel, stream *domain.Stream, minutesUntil int, users []string) string {
 	channelName := channel.GetDisplayName()
 
@@ -214,7 +203,6 @@ func (f *ResponseFormatter) FormatAlarmNotification(channel *domain.Channel, str
 	return sb.String()
 }
 
-// FormatHelp formats help message
 func (f *ResponseFormatter) FormatHelp() string {
 	p := f.prefix
 	return fmt.Sprintf(`🌸 홀로라이브 카카오톡 봇
@@ -235,24 +223,25 @@ func (f *ResponseFormatter) FormatHelp() string {
   %s알람 목록
   %s알람 초기화
 
+📊 통계 (NEW!)
+  %s구독자순위 - 지난 7일 구독자 증가 순위 TOP 10
+  자동 알림: 마일스톤 달성 시 (10만, 100만, 500만 등)
+
 💬 자연어 지원
   예: "%s페코라 일정 알려줘", "%s지금 방송하는 사람 있어?"
 
-❤️ Made with love for Hololive fans`, p, p, p, p, p, p, p, p, p, p, p, p, p)
+❤️ Made with love for Hololive fans`, p, p, p, p, p, p, p, p, p, p, p, p, p, p)
 }
 
-// FormatError formats error message
 func (f *ResponseFormatter) FormatError(message string) string {
 	return fmt.Sprintf("❌ %s", message)
 }
 
-// FormatMemberNotFound formats member not found error
 func (f *ResponseFormatter) FormatMemberNotFound(memberName string) string {
 	return f.FormatError(fmt.Sprintf("'%s' 멤버를 찾을 수 없습니다.", memberName))
 }
 
-// FormatTalentProfile formats official talent profile data into a readable message.
-func (f *ResponseFormatter) FormatTalentProfile(raw *domain.TalentProfile, translated *domain.TranslatedTalentProfile) string {
+func (f *ResponseFormatter) FormatTalentProfile(raw *domain.TalentProfile, translated *domain.Translated) string {
 	if raw == nil {
 		return "❌ 프로필 데이터를 찾을 수 없습니다."
 	}
@@ -341,7 +330,8 @@ func (f *ResponseFormatter) FormatTalentProfile(raw *domain.TalentProfile, trans
 			if strings.TrimSpace(link.Label) == "" || strings.TrimSpace(link.URL) == "" {
 				continue
 			}
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", link.Label, link.URL))
+			translatedLabel := translateSocialLinkLabel(link.Label)
+			sb.WriteString(fmt.Sprintf("- %s: %s\n", translatedLabel, link.URL))
 		}
 	}
 
@@ -353,20 +343,29 @@ func (f *ResponseFormatter) FormatTalentProfile(raw *domain.TalentProfile, trans
 	return strings.TrimSpace(sb.String())
 }
 
-// Helper methods
 
-// truncateTitle truncates a title to the maximum length
+func translateSocialLinkLabel(label string) string {
+	translations := map[string]string{
+		"歌の再生リスト": "음악 플레이리스트",
+		"公式グッズ":    "공식 굿즈",
+		"オフィシャルグッズ": "공식 굿즈",
+	}
+	
+	if korean, ok := translations[label]; ok {
+		return korean
+	}
+	return label
+}
+
 func (f *ResponseFormatter) truncateTitle(title string) string {
 	return util.TruncateString(title, constants.StringLimits.StreamTitle)
 }
 
-// formatStreamTimeInfo formats stream time information
 func (f *ResponseFormatter) formatStreamTimeInfo(stream *domain.Stream) string {
 	if stream == nil || stream.StartScheduled == nil {
 		return "시간 미정"
 	}
 
-	// Convert to KST
 	kstTime := util.FormatKST(*stream.StartScheduled, "01/02 15:04")
 	minutesUntil := stream.MinutesUntilStart()
 

@@ -21,7 +21,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// HolodexChannelRaw represents the raw Holodex API channel response
 type HolodexChannelRaw struct {
 	ID              string  `json:"id"`
 	Name            string  `json:"name"`
@@ -35,22 +34,20 @@ type HolodexChannelRaw struct {
 	Group           *string `json:"group,omitempty"`
 }
 
-// HolodexStreamRaw represents the raw Holodex API stream response
 type HolodexStreamRaw struct {
-	ID             string             `json:"id"`
-	Title          string             `json:"title"`
-	ChannelID      *string            `json:"channel_id,omitempty"`
+	ID             string              `json:"id"`
+	Title          string              `json:"title"`
+	ChannelID      *string             `json:"channel_id,omitempty"`
 	Status         domain.StreamStatus `json:"status"`
-	StartScheduled *string            `json:"start_scheduled,omitempty"`
-	StartActual    *string            `json:"start_actual,omitempty"`
-	Duration       *int               `json:"duration,omitempty"`
-	Link           *string            `json:"link,omitempty"`
-	Thumbnail      *string            `json:"thumbnail,omitempty"`
-	TopicID        *string            `json:"topic_id,omitempty"`
-	Channel        *HolodexChannelRaw `json:"channel,omitempty"`
+	StartScheduled *string             `json:"start_scheduled,omitempty"`
+	StartActual    *string             `json:"start_actual,omitempty"`
+	Duration       *int                `json:"duration,omitempty"`
+	Link           *string             `json:"link,omitempty"`
+	Thumbnail      *string             `json:"thumbnail,omitempty"`
+	TopicID        *string             `json:"topic_id,omitempty"`
+	Channel        *HolodexChannelRaw  `json:"channel,omitempty"`
 }
 
-// HolodexService provides access to Holodex API
 type HolodexService struct {
 	httpClient       *http.Client
 	apiKeys          []string
@@ -65,7 +62,6 @@ type HolodexService struct {
 	circuitMu        sync.RWMutex
 }
 
-// NewHolodexService creates a new Holodex service with optional scraper fallback
 func NewHolodexService(apiKeys []string, cache *CacheService, scraper *ScraperService, logger *zap.Logger) (*HolodexService, error) {
 	if len(apiKeys) == 0 {
 		return nil, fmt.Errorf("at least one Holodex API key is required")
@@ -84,7 +80,6 @@ func NewHolodexService(apiKeys []string, cache *CacheService, scraper *ScraperSe
 	}, nil
 }
 
-// getNextAPIKey gets the next API key in rotation
 func (h *HolodexService) getNextAPIKey() string {
 	h.keyMu.Lock()
 	defer h.keyMu.Unlock()
@@ -94,7 +89,6 @@ func (h *HolodexService) getNextAPIKey() string {
 	return key
 }
 
-// isCircuitOpen checks if circuit breaker is open
 func (h *HolodexService) isCircuitOpen() bool {
 	h.circuitMu.RLock()
 	defer h.circuitMu.RUnlock()
@@ -110,7 +104,6 @@ func (h *HolodexService) isCircuitOpen() bool {
 	return true
 }
 
-// openCircuit opens the circuit breaker
 func (h *HolodexService) openCircuit() {
 	h.circuitMu.Lock()
 	defer h.circuitMu.Unlock()
@@ -124,7 +117,6 @@ func (h *HolodexService) openCircuit() {
 	)
 }
 
-// resetCircuit resets the circuit breaker
 func (h *HolodexService) resetCircuit() {
 	h.circuitMu.Lock()
 	defer h.circuitMu.Unlock()
@@ -136,7 +128,6 @@ func (h *HolodexService) resetCircuit() {
 	h.circuitOpenUntil = nil
 }
 
-// incrementFailureCount safely increments the failure counter
 func (h *HolodexService) incrementFailureCount() int {
 	h.failureMu.Lock()
 	defer h.failureMu.Unlock()
@@ -144,23 +135,19 @@ func (h *HolodexService) incrementFailureCount() int {
 	return h.failureCount
 }
 
-// getFailureCount safely gets the current failure count
 func (h *HolodexService) getFailureCount() int {
 	h.failureMu.Lock()
 	defer h.failureMu.Unlock()
 	return h.failureCount
 }
 
-// computeDelay computes exponential backoff delay with jitter
 func (h *HolodexService) computeDelay(attempt int) time.Duration {
 	jitter := time.Duration(rand.Float64() * float64(constants.RetryConfig.Jitter))
 	base := constants.RetryConfig.BaseDelay * time.Duration(math.Pow(2, float64(attempt)))
 	return base + jitter
 }
 
-// doRequest performs an HTTP request with retry and circuit breaker
 func (h *HolodexService) doRequest(ctx context.Context, method, path string, params url.Values) ([]byte, error) {
-	// Circuit breaker check
 	if h.isCircuitOpen() {
 		h.circuitMu.RLock()
 		var remainingMs int64
@@ -226,7 +213,6 @@ func (h *HolodexService) doRequest(ctx context.Context, method, path string, par
 			continue
 		}
 
-		// Handle rate limiting (429, 403)
 		if resp.StatusCode == 429 || resp.StatusCode == 403 {
 			h.logger.Warn("Rate limited, rotating key",
 				zap.Int("status", resp.StatusCode),
@@ -242,7 +228,6 @@ func (h *HolodexService) doRequest(ctx context.Context, method, path string, par
 			})
 		}
 
-		// Handle server errors (5xx)
 		if resp.StatusCode >= 500 {
 			count := h.incrementFailureCount()
 			h.logger.Warn("Server error",
@@ -264,7 +249,6 @@ func (h *HolodexService) doRequest(ctx context.Context, method, path string, par
 			return nil, errors.NewAPIError(fmt.Sprintf("Server error: %d", resp.StatusCode), resp.StatusCode, nil)
 		}
 
-		// Handle client errors (4xx)
 		if resp.StatusCode >= 400 {
 			return nil, errors.NewAPIError(fmt.Sprintf("Client error: %d", resp.StatusCode), resp.StatusCode, map[string]any{
 				"url":  reqURL,
@@ -272,7 +256,6 @@ func (h *HolodexService) doRequest(ctx context.Context, method, path string, par
 			})
 		}
 
-		// Success
 		h.resetCircuit()
 		return body, nil
 	}
@@ -284,17 +267,14 @@ func (h *HolodexService) doRequest(ctx context.Context, method, path string, par
 	return nil, errors.NewAPIError("Holodex request failed after all retries", 502, nil)
 }
 
-// GetLiveStreams retrieves currently live streams
 func (h *HolodexService) GetLiveStreams(ctx context.Context) ([]*domain.Stream, error) {
 	cacheKey := "live_streams"
 
-	// Check cache
 	var cached []*domain.Stream
 	if err := h.cache.Get(ctx, cacheKey, &cached); err == nil && cached != nil {
 		return cached, nil
 	}
 
-	// Fetch from API
 	params := url.Values{}
 	params.Set("org", "Hololive")
 	params.Set("status", "live")
@@ -314,13 +294,11 @@ func (h *HolodexService) GetLiveStreams(ctx context.Context) ([]*domain.Stream, 
 	streams := h.mapStreamsResponse(rawStreams)
 	filtered := h.filterHololiveStreams(streams)
 
-	// Cache result
 	_ = h.cache.Set(ctx, cacheKey, filtered, constants.CacheTTL.LiveStreams)
 
 	return filtered, nil
 }
 
-// GetUpcomingStreams retrieves upcoming streams within specified hours
 func (h *HolodexService) GetUpcomingStreams(ctx context.Context, hours int) ([]*domain.Stream, error) {
 	cacheKey := fmt.Sprintf("upcoming_streams_%d", hours)
 
@@ -357,13 +335,11 @@ func (h *HolodexService) GetUpcomingStreams(ctx context.Context, hours int) ([]*
 	return upcoming, nil
 }
 
-// GetChannelSchedule retrieves schedule for a specific channel
 func (h *HolodexService) GetChannelSchedule(ctx context.Context, channelID string, hours int, includeLive bool) ([]*domain.Stream, error) {
 	cacheKey := fmt.Sprintf("channel_schedule_%s_%d_%t", channelID, hours, includeLive)
 
 	var cached []*domain.Stream
 	if err := h.cache.Get(ctx, cacheKey, &cached); err == nil && cached != nil {
-		// Deep copy to prevent race conditions
 		copied := make([]*domain.Stream, len(cached))
 		for i, stream := range cached {
 			streamCopy := *stream
@@ -408,7 +384,6 @@ func (h *HolodexService) GetChannelSchedule(ctx context.Context, channelID strin
 				zap.Error(err),
 			)
 
-			// Try scraper fallback if available
 			if h.shouldUseFallback(err) && h.scraper != nil {
 				h.logger.Warn("Using scraper fallback for channel schedule",
 					zap.String("channel_id", channelID),
@@ -431,7 +406,6 @@ func (h *HolodexService) GetChannelSchedule(ctx context.Context, channelID strin
 
 	hololiveOnly := h.filterHololiveStreams(allStreams)
 
-	// Sort by start time
 	sort.Slice(hololiveOnly, func(i, j int) bool {
 		iTime := int64(0)
 		jTime := int64(0)
@@ -454,7 +428,6 @@ func (h *HolodexService) GetChannelSchedule(ctx context.Context, channelID strin
 	return result, nil
 }
 
-// SearchChannels searches for channels by name
 func (h *HolodexService) SearchChannels(ctx context.Context, query string) ([]*domain.Channel, error) {
 	cacheKey := fmt.Sprintf("search_channels_%s", query)
 
@@ -486,7 +459,6 @@ func (h *HolodexService) SearchChannels(ctx context.Context, query string) ([]*d
 		zap.Int("total_results", len(channels)),
 	)
 
-	// Filter out HOLOSTARS
 	filtered := make([]*domain.Channel, 0, len(channels))
 	for _, ch := range channels {
 		if ch.Org != nil && *ch.Org == "Hololive" && !h.isHolostarsChannel(ch) {
@@ -501,7 +473,6 @@ func (h *HolodexService) SearchChannels(ctx context.Context, query string) ([]*d
 	return filtered, nil
 }
 
-// GetChannel retrieves a specific channel by ID
 func (h *HolodexService) GetChannel(ctx context.Context, channelID string) (*domain.Channel, error) {
 	cacheKey := fmt.Sprintf("channel_%s", channelID)
 
@@ -530,7 +501,6 @@ func (h *HolodexService) GetChannel(ctx context.Context, channelID string) (*dom
 	return channel, nil
 }
 
-// mapStreamsResponse maps raw API streams to domain models
 func (h *HolodexService) mapStreamsResponse(rawStreams []HolodexStreamRaw) []*domain.Stream {
 	streams := make([]*domain.Stream, len(rawStreams))
 	for i, raw := range rawStreams {
@@ -539,45 +509,39 @@ func (h *HolodexService) mapStreamsResponse(rawStreams []HolodexStreamRaw) []*do
 	return streams
 }
 
-// mapStreamResponse maps a single raw stream to domain model
 func (h *HolodexService) mapStreamResponse(raw *HolodexStreamRaw) *domain.Stream {
 	stream := &domain.Stream{
-		ID:          raw.ID,
-		Title:       raw.Title,
-		Status:      raw.Status,
-		Duration:    raw.Duration,
-		Thumbnail:   raw.Thumbnail,
-		Link:        raw.Link,
-		TopicID:     raw.TopicID,
+		ID:        raw.ID,
+		Title:     raw.Title,
+		Status:    raw.Status,
+		Duration:  raw.Duration,
+		Thumbnail: raw.Thumbnail,
+		Link:      raw.Link,
+		TopicID:   raw.TopicID,
 	}
 
-	// ChannelID
 	if raw.ChannelID != nil {
 		stream.ChannelID = *raw.ChannelID
 	} else if raw.Channel != nil {
 		stream.ChannelID = raw.Channel.ID
 	}
 
-	// ChannelName
 	if raw.Channel != nil {
 		stream.ChannelName = raw.Channel.Name
 	}
 
-	// StartScheduled
 	if raw.StartScheduled != nil && *raw.StartScheduled != "" {
 		if t, err := time.Parse(time.RFC3339, *raw.StartScheduled); err == nil {
 			stream.StartScheduled = &t
 		}
 	}
 
-	// StartActual
 	if raw.StartActual != nil && *raw.StartActual != "" {
 		if t, err := time.Parse(time.RFC3339, *raw.StartActual); err == nil {
 			stream.StartActual = &t
 		}
 	}
 
-	// Channel
 	if raw.Channel != nil {
 		stream.Channel = h.mapChannelResponse(raw.Channel)
 	}
@@ -585,7 +549,6 @@ func (h *HolodexService) mapStreamResponse(raw *HolodexStreamRaw) *domain.Stream
 	return stream
 }
 
-// mapChannelsResponse maps raw API channels to domain models
 func (h *HolodexService) mapChannelsResponse(rawChannels []HolodexChannelRaw) []*domain.Channel {
 	channels := make([]*domain.Channel, len(rawChannels))
 	for i, raw := range rawChannels {
@@ -594,7 +557,6 @@ func (h *HolodexService) mapChannelsResponse(rawChannels []HolodexChannelRaw) []
 	return channels
 }
 
-// mapChannelResponse maps a single raw channel to domain model
 func (h *HolodexService) mapChannelResponse(raw *HolodexChannelRaw) *domain.Channel {
 	return &domain.Channel{
 		ID:              raw.ID,
@@ -610,7 +572,6 @@ func (h *HolodexService) mapChannelResponse(raw *HolodexChannelRaw) *domain.Chan
 	}
 }
 
-// filterHololiveStreams filters out non-Hololive and HOLOSTARS streams
 func (h *HolodexService) filterHololiveStreams(streams []*domain.Stream) []*domain.Stream {
 	filtered := make([]*domain.Stream, 0, len(streams))
 
@@ -645,7 +606,6 @@ func (h *HolodexService) filterHololiveStreams(streams []*domain.Stream) []*doma
 	return filtered
 }
 
-// filterUpcomingStreams filters out streams that have already started
 func (h *HolodexService) filterUpcomingStreams(streams []*domain.Stream) []*domain.Stream {
 	now := time.Now()
 	filtered := make([]*domain.Stream, 0, len(streams))
@@ -665,7 +625,6 @@ func (h *HolodexService) filterUpcomingStreams(streams []*domain.Stream) []*doma
 	return filtered
 }
 
-// isHolostarsChannel checks if a channel belongs to HOLOSTARS
 func (h *HolodexService) isHolostarsChannel(channel *domain.Channel) bool {
 	if channel == nil {
 		return false
@@ -683,31 +642,24 @@ func (h *HolodexService) isHolostarsChannel(channel *domain.Channel) bool {
 		strings.Contains(upper(channel.EnglishName), "HOLOSTARS")
 }
 
-
-// shouldUseFallback determines if scraper fallback should be used
 func (h *HolodexService) shouldUseFallback(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// Use fallback when circuit breaker is open
 	if h.isCircuitOpen() {
 		return true
 	}
 
-	// Use fallback for API errors
 	if apiErr, ok := err.(*errors.APIError); ok {
-		// Server errors (5xx)
 		if apiErr.StatusCode >= 500 {
 			return true
 		}
-		// Service unavailable
 		if apiErr.StatusCode == 503 {
 			return true
 		}
 	}
 
-	// Use fallback for key rotation errors (all keys exhausted)
 	if _, ok := err.(*errors.KeyRotationError); ok {
 		return true
 	}

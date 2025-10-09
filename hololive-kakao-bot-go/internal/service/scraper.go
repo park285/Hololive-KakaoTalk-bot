@@ -12,11 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// ScraperService scrapes official Hololive schedule site as fallback
 type ScraperService struct {
 	httpClient    *http.Client
 	cache         *CacheService
-	membersData   *domain.MembersData
+	membersData   domain.MemberDataProvider
 	memberNameMap map[string]string // memberName -> channelID
 	logger        *zap.Logger
 	baseURL       string
@@ -28,10 +27,10 @@ const (
 	scraperTimeout      = 15 * time.Second
 )
 
-func NewScraperService(cache *CacheService, membersData *domain.MembersData, logger *zap.Logger) *ScraperService {
+func NewScraperService(cache *CacheService, membersData domain.MemberDataProvider, logger *zap.Logger) *ScraperService {
 	nameMap := make(map[string]string)
 
-	for _, member := range membersData.Members {
+	for _, member := range membersData.GetAllMembers() {
 		nameMap[strings.ToLower(member.Name)] = member.ChannelID
 
 		if member.NameJa != "" {
@@ -49,7 +48,7 @@ func NewScraperService(cache *CacheService, membersData *domain.MembersData, log
 	}
 
 	logger.Info("Scraper initialized with member matching",
-		zap.Int("members", len(membersData.Members)),
+		zap.Int("members", len(membersData.GetAllMembers())),
 		zap.Int("name_mappings", len(nameMap)))
 
 	return &ScraperService{
@@ -277,7 +276,6 @@ func (s *ScraperService) parseDatetimeWithContext(date, timeStr string) (*time.T
 	jst, _ := time.LoadLocation("Asia/Tokyo")
 	now := time.Now().In(jst)
 
-	// Parse as "MM/DD HH:MM"
 	t, err := time.ParseInLocation("01/02 15:04", combined, jst)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", combined, err)

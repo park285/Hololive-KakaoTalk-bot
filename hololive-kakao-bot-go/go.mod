@@ -8,10 +8,12 @@ require (
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
+	github.com/lib/pq v1.10.9
 	github.com/openai/openai-go/v3 v3.2.0
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/sourcegraph/conc v0.3.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/oauth2 v0.32.0
 	google.golang.org/api v0.252.0
 	google.golang.org/genai v1.28.0
 )
@@ -44,7 +46,6 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/oauth2 v0.32.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251002232023-7c0ddcbb5797 // indirect

@@ -1,6 +1,5 @@
 package util
 
-// Max returns the maximum of two integers
 func Max(a, b int) int {
 	if a > b {
 		return a
@@ -8,7 +7,6 @@ func Max(a, b int) int {
 	return b
 }
 
-// Min returns the minimum of two integers
 func Min(a, b int) int {
 	if a < b {
 		return a
@@ -16,7 +14,6 @@ func Min(a, b int) int {
 	return b
 }
 
-// Unique returns a slice of unique integers from the input
 func Unique(nums []int) []int {
 	seen := make(map[int]struct{})
 	result := make([]int, 0, len(nums))

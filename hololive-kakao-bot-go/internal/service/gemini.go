@@ -11,40 +11,35 @@ import (
 	"github.com/kapu/hololive-kakao-bot-go/internal/constants"
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
 	"github.com/kapu/hololive-kakao-bot-go/internal/prompt"
+	"github.com/kapu/hololive-kakao-bot-go/internal/util"
 	"go.uber.org/zap"
 	"google.golang.org/genai"
 )
 
-// Control characters pattern (compiled once at package init)
 var controlCharsPattern = regexp.MustCompile(`[\x00-\x1F\x7F]`)
 
-// Jjang suffix pattern (compiled once)
 var jjangSuffixPattern = regexp.MustCompile(`([가-힣]+)짱`)
 
-// Whitespace pattern (compiled once)
 var whitespacePattern = regexp.MustCompile(`\s+`)
 
-// ParseCacheEntry holds cached parse results
 type ParseCacheEntry struct {
 	Result    *domain.ParseResults
 	Metadata  *GenerateMetadata
 	Timestamp time.Time
 }
 
-// GeminiService handles natural language processing with Gemini
 type GeminiService struct {
-	modelManager           *ModelManager
-	logger                 *zap.Logger
-	memberListCache        string
-	memberListCachedName   string          // Gemini CachedContent name for member list
-	memberListCacheMu      sync.RWMutex
-	memberListCacheExpiry  time.Time
-	parseCache             map[string]*ParseCacheEntry
-	parseCacheMu           sync.RWMutex
-	parseCacheTTL          time.Duration
+	modelManager          *ModelManager
+	logger                *zap.Logger
+	memberListCache       string
+	memberListCachedName  string // Gemini CachedContent name for member list
+	memberListCacheMu     sync.RWMutex
+	memberListCacheExpiry time.Time
+	parseCache            map[string]*ParseCacheEntry
+	parseCacheMu          sync.RWMutex
+	parseCacheTTL         time.Duration
 }
 
-// NewGeminiService creates a new Gemini service
 func NewGeminiService(modelManager *ModelManager, logger *zap.Logger) *GeminiService {
 	return &GeminiService{
 		modelManager:  modelManager,
@@ -54,9 +49,8 @@ func NewGeminiService(modelManager *ModelManager, logger *zap.Logger) *GeminiSer
 	}
 }
 
-// InitializeMemberListCache initializes the context cache for member list
-func (gs *GeminiService) InitializeMemberListCache(ctx context.Context, membersData *domain.MembersData) error {
-	if membersData == nil || len(membersData.Members) == 0 {
+func (gs *GeminiService) InitializeMemberListCache(ctx context.Context, membersData domain.MemberDataProvider) error {
+	if membersData == nil || len(membersData.GetAllMembers()) == 0 {
 		return fmt.Errorf("members data is empty")
 	}
 
@@ -65,9 +59,8 @@ func (gs *GeminiService) InitializeMemberListCache(ctx context.Context, membersD
 		return fmt.Errorf("gemini client not available")
 	}
 
-	// Extract member names
-	memberNames := make([]string, 0, len(membersData.Members))
-	for _, member := range membersData.Members {
+	memberNames := make([]string, 0, len(membersData.GetAllMembers()))
+	for _, member := range membersData.GetAllMembers() {
 		if member != nil && member.Name != "" {
 			memberNames = append(memberNames, member.Name)
 		}
@@ -78,14 +71,13 @@ func (gs *GeminiService) InitializeMemberListCache(ctx context.Context, membersD
 	}
 
 	// Create cached content with member list (must be 1024+ tokens for Gemini Flash)
-	// Using English for token efficiency (Korean uses 2-3x more tokens)
 	memberListText := fmt.Sprintf(`# Hololive Production Official Member Directory
 
-## 📋 Complete Member List (%d members)
+##  Complete Member List (%d members)
 
 %s
 
-## 🎯 Purpose and Usage
+##  Purpose and Usage
 
 This is the official roster of Hololive Production VTubers (English names).
 Use this list to determine if user queries are Hololive-related.
@@ -93,9 +85,9 @@ Use this list to determine if user queries are Hololive-related.
 Hololive is Japan's leading VTuber agency with talents from multiple generations and regions (Japan, Indonesia, English-speaking).
 Each member has unique character design, personality, fanbase, and primarily streams on YouTube.
 
-## 🔍 Classification Criteria
+##  Classification Criteria
 
-### ✅ Hololive-Related (is_hololive_related=true)
+###  Hololive-Related (is_hololive_related=true)
 
 Mark as true when:
 
@@ -112,7 +104,7 @@ Mark as true when:
 3. **Questions about Hololive content, schedules, events**
    - Stream schedules, collaborations, events
 
-### ❌ Not Hololive-Related (is_hololive_related=false)
+###  Not Hololive-Related (is_hololive_related=false)
 
 Mark as false when:
 
@@ -120,7 +112,7 @@ Mark as false when:
 2. **Completely unrelated topics** - Food, travel, general knowledge
 3. **Questions about the bot itself** - "Who are you", "What can you do"
 
-## 💬 Intent Recognition - Ignore Surface Variations
+##  Intent Recognition - Ignore Surface Variations
 
 Users express identical intents in vastly different ways.
 **Focus ONLY on core intent, ignore all surface variations.**
@@ -143,7 +135,7 @@ All Korean verb conjugations of "to tell/inform" are the SAME:
 3. **All verb conjugations** - Treat all forms of a verb as identical
 4. **Grammar variations** - Particles, word order, spacing
 
-## 📝 Clarification Message Rules
+##  Clarification Message Rules
 
 When person mentioned is NOT in the member list:
 
@@ -163,7 +155,7 @@ When person mentioned is NOT in the member list:
 
 Apply these rules consistently for accurate classification and responses.`,
 		len(memberNames), strings.Join(memberNames, ", "))
-	
+
 	systemText := `You are a Hololive VTuber specialist assistant.
 Your role: Analyze user questions to determine Hololive-relatedness and generate Korean clarification messages when needed.
 
@@ -173,7 +165,7 @@ Core responsibilities:
 3. Generate polite Korean clarification messages when appropriate
 
 Always understand user intent accurately and provide consistent responses.`
-	
+
 	cachedContent, err := client.Caches.Create(ctx, gs.modelManager.GetDefaultGeminiModel(), &genai.CreateCachedContentConfig{
 		Contents: []*genai.Content{
 			{
@@ -207,20 +199,18 @@ Always understand user intent accurately and provide consistent responses.`
 		zap.Time("expiry", gs.memberListCacheExpiry),
 	)
 
-	// Start auto-refresh goroutine
 	go gs.autoRefreshMemberListCache(ctx, membersData)
 
 	return nil
 }
 
-// autoRefreshMemberListCache automatically refreshes the cache every 24 hours
-func (gs *GeminiService) autoRefreshMemberListCache(ctx context.Context, membersData *domain.MembersData) {
+func (gs *GeminiService) autoRefreshMemberListCache(ctx context.Context, membersData domain.MemberDataProvider) {
 	ticker := time.NewTicker(23 * time.Hour) // Refresh 1 hour before expiry
 	defer ticker.Stop()
 
 	for range ticker.C {
 		gs.logger.Info("Auto-refreshing member list cache")
-		
+
 		if err := gs.InitializeMemberListCache(ctx, membersData); err != nil {
 			gs.logger.Error("Failed to auto-refresh member list cache", zap.Error(err))
 		} else {
@@ -229,19 +219,16 @@ func (gs *GeminiService) autoRefreshMemberListCache(ctx context.Context, members
 	}
 }
 
-// GetMemberListCacheName returns the current cached content name
 func (gs *GeminiService) GetMemberListCacheName() string {
 	gs.memberListCacheMu.RLock()
 	defer gs.memberListCacheMu.RUnlock()
 	return gs.memberListCachedName
 }
 
-// ParseNaturalLanguage parses natural language query into command(s)
-func (gs *GeminiService) ParseNaturalLanguage(ctx context.Context, query string, membersData *domain.MembersData) (*domain.ParseResults, *GenerateMetadata, error) {
-	normalizedQuery := strings.ToLower(strings.TrimSpace(query))
+func (gs *GeminiService) ParseNaturalLanguage(ctx context.Context, query string, membersData domain.MemberDataProvider) (*domain.ParseResults, *GenerateMetadata, error) {
+	normalizedQuery := util.Normalize(query)
 	cacheKey := fmt.Sprintf("parse:%s", normalizedQuery)
 
-	// Check cache
 	gs.parseCacheMu.RLock()
 	cached, found := gs.parseCache[cacheKey]
 	gs.parseCacheMu.RUnlock()
@@ -249,27 +236,19 @@ func (gs *GeminiService) ParseNaturalLanguage(ctx context.Context, query string,
 	if found {
 		age := time.Since(cached.Timestamp)
 		if age < gs.parseCacheTTL {
-			gs.logger.Debug("Parse cache hit",
-				zap.String("query", query),
-				zap.Duration("age", age),
-			)
 			return cached.Result, cached.Metadata, nil
 		}
 
-		// Expired - remove
 		gs.parseCacheMu.Lock()
 		delete(gs.parseCache, cacheKey)
 		gs.parseCacheMu.Unlock()
 	}
 
-	// Parse fresh
-	gs.logger.Debug("Parse cache miss", zap.String("query", query))
 	result, metadata, err := gs.parseNaturalLanguageImpl(ctx, query, membersData)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Cache result
 	gs.parseCacheMu.Lock()
 	gs.parseCache[cacheKey] = &ParseCacheEntry{
 		Result:    result,
@@ -278,20 +257,17 @@ func (gs *GeminiService) ParseNaturalLanguage(ctx context.Context, query string,
 	}
 	gs.parseCacheMu.Unlock()
 
-	// Auto cleanup
 	go func() {
 		time.Sleep(gs.parseCacheTTL)
 		gs.parseCacheMu.Lock()
 		delete(gs.parseCache, cacheKey)
 		gs.parseCacheMu.Unlock()
-		gs.logger.Debug("Parse cache expired", zap.String("query", query))
 	}()
 
 	return result, metadata, nil
 }
 
-// parseNaturalLanguageImpl implements the actual parsing logic
-func (gs *GeminiService) parseNaturalLanguageImpl(ctx context.Context, query string, membersData *domain.MembersData) (*domain.ParseResults, *GenerateMetadata, error) {
+func (gs *GeminiService) parseNaturalLanguageImpl(ctx context.Context, query string, membersData domain.MemberDataProvider) (*domain.ParseResults, *GenerateMetadata, error) {
 	sanitized := gs.sanitizeInput(query)
 	if sanitized == "" {
 		gs.logger.Warn("Empty query after sanitization")
@@ -308,23 +284,21 @@ func (gs *GeminiService) parseNaturalLanguageImpl(ctx context.Context, query str
 			}, nil
 	}
 
-	// Normalize "짱" suffix
-	normalized := jjangSuffixPattern.ReplaceAllString(sanitized, "$1")
-	if normalized != sanitized {
-		gs.logger.Info("Normalized query suffix",
+	// Apply suffix normalization (removes "짱", "쨩")
+	normalized := sanitized
+	if withoutSuffix := util.NormalizeSuffix(sanitized); withoutSuffix != sanitized {
+		normalized = withoutSuffix
+		gs.logger.Info("Normalized query suffix", 
 			zap.String("original", sanitized),
 			zap.String("normalized", normalized),
 		)
 	}
 
-	// Build prompt
 	promptText := gs.buildPrompt(normalized, membersData)
 
-	// Call AI with precise preset for accurate command parsing
 	var rawResult any
 	metadata, err := gs.modelManager.GenerateJSON(ctx, promptText, PresetPrecise, &rawResult, nil)
 	if err != nil {
-		// Check if circuit open error
 		if strings.Contains(err.Error(), "외부 AI 서비스 장애") {
 			return nil, nil, err
 		}
@@ -343,7 +317,6 @@ func (gs *GeminiService) parseNaturalLanguageImpl(ctx context.Context, query str
 			}, nil
 	}
 
-	// Parse result - can be single object or array
 	parseResults, err := gs.parseAIResponse(rawResult)
 	if err != nil {
 		gs.logger.Error("Failed to parse AI response", zap.Error(err))
@@ -360,9 +333,7 @@ func (gs *GeminiService) parseNaturalLanguageImpl(ctx context.Context, query str
 	return parseResults, metadata, nil
 }
 
-// parseAIResponse parses the AI response into ParseResults
 func (gs *GeminiService) parseAIResponse(rawResult any) (*domain.ParseResults, error) {
-	// Check if array (multiple commands)
 	if arr, ok := rawResult.([]any); ok {
 		results := make([]*domain.ParseResult, 0, len(arr))
 		for _, item := range arr {
@@ -379,7 +350,6 @@ func (gs *GeminiService) parseAIResponse(rawResult any) (*domain.ParseResults, e
 		return &domain.ParseResults{Multiple: results}, nil
 	}
 
-	// Single object
 	pr, err := gs.parseResultObject(rawResult)
 	if err != nil {
 		return nil, err
@@ -387,7 +357,6 @@ func (gs *GeminiService) parseAIResponse(rawResult any) (*domain.ParseResults, e
 	return &domain.ParseResults{Single: pr}, nil
 }
 
-// parseResultObject parses a single result object
 func (gs *GeminiService) parseResultObject(obj any) (*domain.ParseResult, error) {
 	m, ok := obj.(map[string]any)
 	if !ok {
@@ -398,24 +367,20 @@ func (gs *GeminiService) parseResultObject(obj any) (*domain.ParseResult, error)
 		Params: make(map[string]any),
 	}
 
-	// Parse command
 	if cmd, ok := m["command"].(string); ok {
 		pr.Command = domain.CommandType(strings.ToLower(cmd))
 	} else {
 		return nil, fmt.Errorf("missing command field")
 	}
 
-	// Parse params
 	if params, ok := m["params"].(map[string]any); ok {
 		pr.Params = params
 	}
 
-	// Parse confidence
 	if conf, ok := m["confidence"].(float64); ok {
 		pr.Confidence = conf
 	}
 
-	// Parse reasoning
 	if reasoning, ok := m["reasoning"].(string); ok {
 		pr.Reasoning = reasoning
 	}
@@ -423,7 +388,6 @@ func (gs *GeminiService) parseResultObject(obj any) (*domain.ParseResult, error)
 	return pr, nil
 }
 
-// SelectBestChannel selects the best matching channel from candidates
 func (gs *GeminiService) SelectBestChannel(ctx context.Context, query string, candidates []*domain.Channel) (*domain.Channel, error) {
 	if len(candidates) == 0 {
 		return nil, nil
@@ -439,10 +403,8 @@ func (gs *GeminiService) SelectBestChannel(ctx context.Context, query string, ca
 		return nil, nil
 	}
 
-	// Build prompt
-	promptText := prompt.BuildSelectorPrompt(sanitized, candidates)
+	promptText := prompt.BuildSelector(sanitized, candidates)
 
-	// Call AI
 	var selection domain.ChannelSelection
 	metadata, err := gs.modelManager.GenerateJSON(ctx, promptText, PresetPrecise, &selection, &GenerateOptions{
 		Overrides: &ModelConfig{MaxOutputTokens: 256},
@@ -461,7 +423,6 @@ func (gs *GeminiService) SelectBestChannel(ctx context.Context, query string, ca
 		zap.String("provider", metadata.Provider),
 	)
 
-	// Check confidence
 	if selection.SelectedIndex == -1 || selection.Confidence < 0.7 {
 		gs.logger.Warn("Low confidence in channel selection")
 		return nil, nil
@@ -478,7 +439,6 @@ func (gs *GeminiService) SelectBestChannel(ctx context.Context, query string, ca
 	return candidates[selection.SelectedIndex], nil
 }
 
-// GenerateClarificationMessage produces a user-facing clarification message when member matching fails
 func (gs *GeminiService) GenerateClarificationMessage(ctx context.Context, query string) (string, *GenerateMetadata, error) {
 	sanitized := gs.sanitizeInput(query)
 	if sanitized == "" {
@@ -489,7 +449,7 @@ func (gs *GeminiService) GenerateClarificationMessage(ctx context.Context, query
 		return "", nil, fmt.Errorf("empty query for clarification")
 	}
 
-	promptText := prompt.BuildClarificationPrompt(sanitized)
+	promptText := prompt.BuildBasic(sanitized)
 
 	var clarification domain.ClarificationResponse
 	metadata, err := gs.modelManager.GenerateJSON(ctx, promptText, PresetBalanced, &clarification, &GenerateOptions{
@@ -524,8 +484,7 @@ func (gs *GeminiService) GenerateClarificationMessage(ctx context.Context, query
 	return finalMessage, metadata, nil
 }
 
-// GenerateSmartClarification produces a Hololive-aware clarification message
-func (gs *GeminiService) GenerateSmartClarification(ctx context.Context, query string, membersData *domain.MembersData) (*domain.SmartClarificationResponse, *GenerateMetadata, error) {
+func (gs *GeminiService) GenerateSmartClarification(ctx context.Context, query string, membersData domain.MemberDataProvider) (*domain.Clarification, *GenerateMetadata, error) {
 	sanitized := gs.sanitizeInput(query)
 	if sanitized == "" {
 		sanitized = strings.TrimSpace(query)
@@ -535,45 +494,40 @@ func (gs *GeminiService) GenerateSmartClarification(ctx context.Context, query s
 		return nil, nil, fmt.Errorf("empty query for smart clarification")
 	}
 
-	// Check if we have cached member list
 	cachedName := gs.GetMemberListCacheName()
 	var promptText string
 	var generateOpts *GenerateOptions
 
 	if cachedName != "" {
-		// Use cached member list
-		promptText = prompt.BuildSmartClarificationPromptWithoutMembers(sanitized)
+		promptText = prompt.BuildWithoutMembers(sanitized)
 		generateOpts = &GenerateOptions{
 			Overrides:     &ModelConfig{MaxOutputTokens: 512},
 			CachedContent: cachedName,
 		}
-		gs.logger.Debug("Using cached member list", zap.String("cache_name", cachedName))
 	} else {
-		// Fallback: embed member list in prompt
 		var memberNames []string
-		if membersData != nil && len(membersData.Members) > 0 {
-			memberNames = make([]string, 0, len(membersData.Members))
-			for _, member := range membersData.Members {
+		if membersData != nil && len(membersData.GetAllMembers()) > 0 {
+			memberNames = make([]string, 0, len(membersData.GetAllMembers()))
+			for _, member := range membersData.GetAllMembers() {
 				if member != nil && member.Name != "" {
 					memberNames = append(memberNames, member.Name)
 				}
 			}
 		}
-		promptText = prompt.BuildSmartClarificationPrompt(sanitized, memberNames)
+		promptText = prompt.BuildWithMembers(sanitized, memberNames)
 		generateOpts = &GenerateOptions{
 			Overrides: &ModelConfig{MaxOutputTokens: 512},
 		}
 		gs.logger.Warn("Member list cache not available, embedding in prompt")
 	}
 
-	var response domain.SmartClarificationResponse
+	var response domain.Clarification
 	metadata, err := gs.modelManager.GenerateJSON(ctx, promptText, PresetBalanced, &response, generateOpts)
 	if err != nil {
 		gs.logger.Error("Failed to generate smart clarification", zap.Error(err))
 		return nil, nil, err
 	}
 
-	// Ensure message is set if hololive-related
 	if response.IsHololiveRelated && strings.TrimSpace(response.Message) == "" {
 		candidate := strings.TrimSpace(response.Candidate)
 		if candidate == "" {
@@ -621,44 +575,34 @@ func extractQuotedCandidate(message string) string {
 	return strings.TrimSpace(remaining[:end])
 }
 
-// buildPrompt builds the parser prompt with member list
-func (gs *GeminiService) buildPrompt(query string, membersData *domain.MembersData) string {
+func (gs *GeminiService) buildPrompt(query string, membersData domain.MemberDataProvider) string {
 	if gs.memberListCache == "" {
 		gs.memberListCache = gs.buildMemberListWithAliases(membersData)
-		gs.logger.Debug("Member list cached",
-			zap.Int("members", len(membersData.Members)),
-			zap.Int("size", len(gs.memberListCache)),
-		)
 	}
 
 	return prompt.BuildParserPrompt(prompt.ParserPromptVars{
-		MemberCount:       len(membersData.Members),
+		MemberCount:       len(membersData.GetAllMembers()),
 		MemberListWithIDs: gs.memberListCache,
 		UserQuery:         query,
 	})
 }
 
-// buildMemberListWithAliases builds formatted member list with aliases
-func (gs *GeminiService) buildMemberListWithAliases(membersData *domain.MembersData) string {
-	lines := make([]string, len(membersData.Members))
+func (gs *GeminiService) buildMemberListWithAliases(membersData domain.MemberDataProvider) string {
+	lines := make([]string, len(membersData.GetAllMembers()))
 
-	for i, member := range membersData.Members {
+	for i, member := range membersData.GetAllMembers() {
 		allAliases := member.GetAllAliases()
 		aliasesStr := strings.Join(allAliases, ",")
 
-		// Format: "EnglishName|aliases|channelID"
 		lines[i] = fmt.Sprintf("%s|%s|%s", member.Name, aliasesStr, member.ChannelID)
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-// sanitizeInput sanitizes user input
 func (gs *GeminiService) sanitizeInput(input string) string {
-	// Remove control characters
 	withoutControl := controlCharsPattern.ReplaceAllString(input, " ")
 
-	// Normalize whitespace
 	normalized := whitespacePattern.ReplaceAllString(withoutControl, " ")
 	trimmed := strings.TrimSpace(normalized)
 
@@ -666,7 +610,6 @@ func (gs *GeminiService) sanitizeInput(input string) string {
 		return ""
 	}
 
-	// Limit length
 	if len(trimmed) > constants.AIInputLimits.MaxQueryLength {
 		return trimmed[:constants.AIInputLimits.MaxQueryLength]
 	}
@@ -674,31 +617,27 @@ func (gs *GeminiService) sanitizeInput(input string) string {
 	return trimmed
 }
 
-// InvalidateMemberCache invalidates the member list cache
 func (gs *GeminiService) InvalidateMemberCache() {
 	gs.memberListCache = ""
 	gs.logger.Info("Member list cache invalidated")
 }
 
-// ClassifyMemberInfoIntent classifies whether a query is asking for member information
-func (gs *GeminiService) ClassifyMemberInfoIntent(ctx context.Context, query string) (*domain.MemberIntentClassification, *GenerateMetadata, error) {
-	// Simple implementation - can be enhanced later
+func (gs *GeminiService) ClassifyMemberInfoIntent(ctx context.Context, query string) (*domain.MemberIntent, *GenerateMetadata, error) {
 	sanitized := gs.sanitizeInput(query)
 	if sanitized == "" {
-		return &domain.MemberIntentClassification{
+		return &domain.MemberIntent{
 			Intent:     domain.MemberIntentOther,
 			Confidence: 1.0,
 			Reasoning:  "Empty query",
 		}, &GenerateMetadata{Provider: "None", Model: "n/a"}, nil
 	}
 
-	// Basic keyword matching for now
 	memberKeywords := []string{"누구", "알려", "소개", "프로필", "정보", "멤버"}
 	lowerQuery := strings.ToLower(sanitized)
 
 	for _, keyword := range memberKeywords {
 		if strings.Contains(lowerQuery, keyword) {
-			return &domain.MemberIntentClassification{
+			return &domain.MemberIntent{
 				Intent:     domain.MemberIntentMemberInfo,
 				Confidence: 0.8,
 				Reasoning:  fmt.Sprintf("Contains keyword: %s", keyword),
@@ -706,7 +645,7 @@ func (gs *GeminiService) ClassifyMemberInfoIntent(ctx context.Context, query str
 		}
 	}
 
-	return &domain.MemberIntentClassification{
+	return &domain.MemberIntent{
 		Intent:     domain.MemberIntentOther,
 		Confidence: 0.6,
 		Reasoning:  "No member info keywords detected",

@@ -1,6 +1,5 @@
 package service
 
-// ModelPreset represents the model usage preset
 type ModelPreset string
 
 const (
@@ -9,7 +8,6 @@ const (
 	PresetBalanced ModelPreset = "balanced" // 균형잡힌 응답
 )
 
-// ModelConfig holds model configuration
 type ModelConfig struct {
 	Temperature      float32
 	TopP             float32
@@ -18,21 +16,18 @@ type ModelConfig struct {
 	ResponseMimeType string // "application/json" or "text/plain"
 }
 
-// OpenAIConfig holds OpenAI-specific configuration
 type OpenAIConfig struct {
 	Temperature float32
 	MaxTokens   int
 	TopP        float32
 }
 
-// GenerateMetadata contains metadata about the generation
 type GenerateMetadata struct {
 	Provider     string
 	Model        string
 	UsedFallback bool
 }
 
-// GenerateOptions holds options for AI generation
 type GenerateOptions struct {
 	Model         string
 	JSONMode      bool
@@ -40,7 +35,6 @@ type GenerateOptions struct {
 	CachedContent string // Gemini CachedContent name for context caching
 }
 
-// GetPresetConfig returns the configuration for a preset
 func GetPresetConfig(preset ModelPreset) ModelConfig {
 	switch preset {
 	case PresetCreative:
@@ -69,7 +63,6 @@ func GetPresetConfig(preset ModelPreset) ModelConfig {
 	}
 }
 
-// GetOpenAIPresetConfig returns OpenAI configuration for a preset
 func GetOpenAIPresetConfig(preset ModelPreset) OpenAIConfig {
 	switch preset {
 	case PresetCreative:

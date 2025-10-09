@@ -1,0 +1,60 @@
+{
+  "slug": "friend-a",
+  "english_name": "Friend-A",
+  "japanese_name": "Friend-A",
+  "catchphrase": "「こんにちは、ホロライブスタッフの友人Aです。」",
+  "description": "ホロライブ事務所、初のスタッフ。個性豊かなアイドルたちと、膨大な仕事に振り回されつつ、事務所やアイドルの成長を心から喜んでいる。\n後輩の新人スタッフ「春先のどか」と共に、目指すはホロライブを世界一のアイドル事務所にすることと、残業をゼロにすること。",
+  "data_entries": [
+    {
+      "label": "誕生日",
+      "value": "2月28日"
+    },
+    {
+      "label": "初出演日",
+      "value": "2018年2月28日"
+    },
+    {
+      "label": "身長",
+      "value": "157.1cm"
+    },
+    {
+      "label": "ユニット",
+      "value": "事務所スタッフ"
+    },
+    {
+      "label": "イラストレーター",
+      "value": "おるだん"
+    },
+    {
+      "label": "夢",
+      "value": "ホロライブを世界一のVTuberアイドル事務所にする\n後輩「春先のどか」と2人で、VTuber界イチの先輩後輩コンビになる\n仕事系ドキュメンタリー番組に密着される"
+    },
+    {
+      "label": "ハッシュタグ",
+      "value": "ファンアート：#絵ーちゃん\n定期配信：#ホロのこしかけ"
+    },
+    {
+      "label": "Words",
+      "value": "月曜日\n汚い悲鳴\nホロぐらのモブ"
+    },
+    {
+      "label": "趣味",
+      "value": "ホロライブメンバーの配信・ツイート確認\n英語の勉強\n音楽/DJ"
+    },
+    {
+      "label": "好きなもの",
+      "value": "激辛料理（特にカレー）\nエナジードリンク"
+    }
+  ],
+  "social_links": [
+    {
+      "label": "YouTube",
+      "url": "https://www.youtube.com/channel/UCJFZiqLMntJufDCHc6bQixg?sub_confirmation=1"
+    },
+    {
+      "label": "X",
+      "url": "https://twitter.com/achan_UGA"
+    }
+  ],
+  "official_url": "https://hololive.hololivepro.com/talents/friend-a/"
+}

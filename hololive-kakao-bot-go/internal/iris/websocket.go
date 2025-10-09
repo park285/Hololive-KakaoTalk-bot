@@ -135,11 +135,6 @@ func (ws *WebSocket) handleMessage(data []byte) {
 	}
 
 	if message.JSON != nil {
-		// Check if message contains isMine:true
-		// TypeScript checks: message.json?.['v']?.includes('"isMine":true')
-		// We need to check the raw JSON or a specific field
-		// For now, skip messages from self based on sender or other logic
-		// This is a simplified check - adjust based on actual Iris behavior
 	}
 
 	ws.callbacksMu.RLock()

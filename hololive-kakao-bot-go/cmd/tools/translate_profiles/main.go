@@ -138,17 +138,17 @@ func main() {
 	}
 
 	// Original translation mode
-	rawProfiles, err := domain.LoadOfficialProfiles()
+	rawProfiles, err := domain.LoadProfiles()
 	if err != nil {
 		logger.Fatal("failed to load official profiles", zap.Error(err))
 	}
 
-	existingTranslations, err := domain.LoadOfficialTranslatedProfiles()
+	existingTranslations, err := domain.LoadTranslated()
 	if err != nil {
 		logger.Fatal("failed to load existing translations", zap.Error(err))
 	}
 
-	translations := make(map[string]*domain.TranslatedTalentProfile, len(rawProfiles))
+	translations := make(map[string]*domain.Translated, len(rawProfiles))
 	if !force {
 		for slug, translated := range existingTranslations {
 			if translated != nil {
@@ -239,21 +239,21 @@ func buildPrompt(profile *domain.TalentProfile) (string, error) {
 		return "", errors.New("profile is nil")
 	}
 
-	entries := make([]prompt.ProfileTranslationPromptEntry, 0, len(profile.DataEntries))
+	entries := make([]prompt.TranslateEntry, 0, len(profile.DataEntries))
 	for _, entry := range profile.DataEntries {
 		label := strings.TrimSpace(entry.Label)
 		value := strings.TrimSpace(entry.Value)
 		if label == "" || value == "" {
 			continue
 		}
-		entries = append(entries, prompt.ProfileTranslationPromptEntry{Label: label, Value: value})
+		entries = append(entries, prompt.TranslateEntry{Label: label, Value: value})
 	}
 
 	if len(entries) > maxDataEntries {
 		entries = entries[:maxDataEntries]
 	}
 
-	promptText, err := prompt.BuildProfileTranslationPrompt(prompt.ProfileTranslationPromptVars{
+	promptText, err := prompt.BuildTranslate(prompt.TranslateVars{
 		EnglishName:    profile.EnglishName,
 		JapaneseName:   profile.JapaneseName,
 		Catchphrase:    profile.Catchphrase,
@@ -267,11 +267,11 @@ func buildPrompt(profile *domain.TalentProfile) (string, error) {
 	return promptText, nil
 }
 
-func translateWithRetry(ctx context.Context, mm *service.ModelManager, promptText string, profile *domain.TalentProfile, logger *zap.Logger) (*domain.TranslatedTalentProfile, error) {
+func translateWithRetry(ctx context.Context, mm *service.ModelManager, promptText string, profile *domain.TalentProfile, logger *zap.Logger) (*domain.Translated, error) {
 	var lastErr error
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		var translated domain.TranslatedTalentProfile
+		var translated domain.Translated
 		_, err := mm.GenerateJSON(ctx, promptText, service.PresetBalanced, &translated, nil)
 		if err == nil {
 			normalizeTranslation(&translated, profile)
@@ -327,7 +327,7 @@ func isRecoverableError(err error) bool {
 	return false
 }
 
-func normalizeTranslation(translated *domain.TranslatedTalentProfile, raw *domain.TalentProfile) {
+func normalizeTranslation(translated *domain.Translated, raw *domain.TalentProfile) {
 	if translated == nil || raw == nil {
 		return
 	}
@@ -370,7 +370,7 @@ func shouldPreserveRawValue(rawLabel string) bool {
 	return false
 }
 
-func writeOutput(data map[string]*domain.TranslatedTalentProfile) error {
+func writeOutput(data map[string]*domain.Translated) error {
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return err
 	}
@@ -413,7 +413,7 @@ func writeOutput(data map[string]*domain.TranslatedTalentProfile) error {
 }
 
 func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlags multiString, slugCSV string, logger *zap.Logger) error {
-	existingTranslations, err := domain.LoadOfficialTranslatedProfiles()
+	existingTranslations, err := domain.LoadTranslated()
 	if err != nil {
 		return fmt.Errorf("failed to load existing translations: %w", err)
 	}
@@ -452,7 +452,7 @@ func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlag
 		zap.Int("targets", len(slugs)),
 	)
 
-	improved := make(map[string]*domain.TranslatedTalentProfile, len(slugs))
+	improved := make(map[string]*domain.Translated, len(slugs))
 
 	for _, slug := range slugs {
 		profile := existingTranslations[slug]
@@ -466,7 +466,7 @@ func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlag
 			continue
 		}
 
-		promptText, err := prompt.BuildProfileStyleImprovementPrompt(prompt.ProfileStyleImprovementPromptVars{
+		promptText, err := prompt.BuildStyle(prompt.StyleVars{
 			CurrentTranslation: string(currentJSON),
 		})
 		if err != nil {
@@ -474,7 +474,7 @@ func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlag
 			continue
 		}
 
-		var improvedProfile domain.TranslatedTalentProfile
+		var improvedProfile domain.Translated
 		_, genErr := mm.GenerateJSON(ctx, promptText, service.PresetBalanced, &improvedProfile, nil)
 		if genErr != nil {
 			logger.Error("style improvement failed", zap.String("slug", slug), zap.Error(genErr))
@@ -507,12 +507,12 @@ func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlag
 }
 
 func runRefineFromOriginal(ctx context.Context, mm *service.ModelManager, slugFlags multiString, slugCSV string, model string, maxOutputTokens int, logger *zap.Logger) error {
-	rawProfiles, err := domain.LoadOfficialProfiles()
+	rawProfiles, err := domain.LoadProfiles()
 	if err != nil {
 		return fmt.Errorf("failed to load original profiles: %w", err)
 	}
 
-	existingTranslations, err := domain.LoadOfficialTranslatedProfiles()
+	existingTranslations, err := domain.LoadTranslated()
 	if err != nil {
 		return fmt.Errorf("failed to load existing translations: %w", err)
 	}
@@ -553,7 +553,7 @@ func runRefineFromOriginal(ctx context.Context, mm *service.ModelManager, slugFl
 		zap.Int("max_output_tokens", maxOutputTokens),
 	)
 
-	refined := make(map[string]*domain.TranslatedTalentProfile, len(slugs))
+	refined := make(map[string]*domain.Translated, len(slugs))
 
 	for _, slug := range slugs {
 		original := rawProfiles[slug]
@@ -568,7 +568,7 @@ func runRefineFromOriginal(ctx context.Context, mm *service.ModelManager, slugFl
 			continue
 		}
 
-		promptText, err := prompt.BuildProfileRefineFromOriginalPrompt(prompt.ProfileRefineFromOriginalPromptVars{
+		promptText, err := prompt.BuildRefine(prompt.RefineVars{
 			OriginalCatchphrase: original.Catchphrase,
 			OriginalDescription: original.Description,
 			CurrentTranslation:  string(currentJSON),
@@ -588,7 +588,7 @@ func runRefineFromOriginal(ctx context.Context, mm *service.ModelManager, slugFl
 			}
 		}
 
-		var refinedProfile domain.TranslatedTalentProfile
+		var refinedProfile domain.Translated
 		_, genErr := mm.GenerateJSON(ctx, promptText, service.PresetBalanced, &refinedProfile, opts)
 		if genErr != nil {
 			logger.Error("refinement failed", zap.String("slug", slug), zap.Error(genErr))

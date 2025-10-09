@@ -16,6 +16,7 @@ type Config struct {
 	Holodex      HolodexConfig
 	YouTube      YouTubeConfig
 	Redis        RedisConfig
+	Postgres     PostgresConfig
 	Gemini       GeminiConfig
 	OpenAI       OpenAIConfig
 	Notification NotificationConfig
@@ -46,6 +47,14 @@ type RedisConfig struct {
 	Port     int
 	Password string
 	DB       int
+}
+
+type PostgresConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Database string
 }
 
 type GeminiConfig struct {
@@ -94,6 +103,13 @@ func Load() (*Config, error) {
 			Port:     getEnvInt("REDIS_PORT", 6379),
 			Password: getEnv("REDIS_PASSWORD", ""),
 			DB:       getEnvInt("REDIS_DB", 0),
+		},
+		Postgres: PostgresConfig{
+			Host:     getEnv("POSTGRES_HOST", "localhost"),
+			Port:     getEnvInt("POSTGRES_PORT", 5432),
+			User:     getEnv("POSTGRES_USER", "holo_user"),
+			Password: getEnv("POSTGRES_PASSWORD", "holo_password"),
+			Database: getEnv("POSTGRES_DB", "holo_oshi_db"),
 		},
 		Gemini: GeminiConfig{
 			APIKey: getEnv("GEMINI_API_KEY", ""),

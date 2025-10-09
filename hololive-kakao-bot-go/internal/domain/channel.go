@@ -1,6 +1,5 @@
 package domain
 
-// Channel represents a YouTube channel (Hololive member)
 type Channel struct {
 	ID              string  `json:"id"`
 	Name            string  `json:"name"`
@@ -14,7 +13,6 @@ type Channel struct {
 	Group           *string `json:"group,omitempty"`
 }
 
-// GetDisplayName returns English name if available, otherwise Japanese name
 func (c *Channel) GetDisplayName() string {
 	if c == nil {
 		return ""
@@ -25,7 +23,6 @@ func (c *Channel) GetDisplayName() string {
 	return c.Name
 }
 
-// IsHololive checks if the channel belongs to Hololive organization
 func (c *Channel) IsHololive() bool {
 	if c == nil || c.Org == nil {
 		return false
@@ -33,7 +30,6 @@ func (c *Channel) IsHololive() bool {
 	return *c.Org == "Hololive"
 }
 
-// HasPhoto returns true if the channel has a photo URL
 func (c *Channel) HasPhoto() bool {
 	if c == nil {
 		return false
@@ -41,7 +37,6 @@ func (c *Channel) HasPhoto() bool {
 	return c.Photo != nil && *c.Photo != ""
 }
 
-// GetPhotoURL returns the photo URL or empty string
 func (c *Channel) GetPhotoURL() string {
 	if c == nil {
 		return ""

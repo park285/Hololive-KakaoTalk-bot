@@ -9,27 +9,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// MemberInfoCommand handles official member profile queries.
 type MemberInfoCommand struct {
 	deps *Dependencies
 }
 
-// NewMemberInfoCommand creates a new MemberInfoCommand.
 func NewMemberInfoCommand(deps *Dependencies) *MemberInfoCommand {
 	return &MemberInfoCommand{deps: deps}
 }
 
-// Name returns the command key.
 func (c *MemberInfoCommand) Name() string {
 	return string(domain.CommandMemberInfo)
 }
 
-// Description returns a human-readable description.
 func (c *MemberInfoCommand) Description() string {
 	return "홀로라이브 멤버 공식 프로필"
 }
 
-// Execute resolves the member and returns translated profile information.
 func (c *MemberInfoCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
 	if c.deps == nil ||
 		c.deps.Matcher == nil ||
@@ -57,7 +52,7 @@ func (c *MemberInfoCommand) Execute(ctx context.Context, cmdCtx *domain.CommandC
 		return c.deps.SendError(cmdCtx.Room, c.deps.Formatter.FormatMemberNotFound(target))
 	}
 
-	rawProfile, translated, err := c.deps.OfficialProfiles.GetProfileWithTranslation(ctx, member.Name)
+	rawProfile, translated, err := c.deps.OfficialProfiles.GetWithTranslation(ctx, member.Name)
 	if err != nil {
 		c.log().Error("Failed to load member profile",
 			zap.String("member", member.Name),
@@ -71,7 +66,6 @@ func (c *MemberInfoCommand) Execute(ctx context.Context, cmdCtx *domain.CommandC
 		return c.deps.SendError(cmdCtx.Room, fmt.Sprintf("'%s' 프로필을 구성하지 못했습니다.", member.Name))
 	}
 
-	// Add graduated notice if applicable
 	if member.IsGraduated {
 		message = "⚠️ 졸업한 멤버입니다.\n\n" + message
 	}

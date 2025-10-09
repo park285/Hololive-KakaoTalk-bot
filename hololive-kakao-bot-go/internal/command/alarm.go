@@ -9,27 +9,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// AlarmCommand handles alarm management
 type AlarmCommand struct {
 	deps *Dependencies
 }
 
-// NewAlarmCommand creates a new AlarmCommand
 func NewAlarmCommand(deps *Dependencies) *AlarmCommand {
 	return &AlarmCommand{deps: deps}
 }
 
-// Name returns the command name
 func (c *AlarmCommand) Name() string {
 	return "alarm"
 }
 
-// Description returns the command description
 func (c *AlarmCommand) Description() string {
 	return "방송 알람 관리"
 }
 
-// Execute executes the alarm command
 func (c *AlarmCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
 	if c.deps.Alarm == nil {
 		return c.deps.SendError(cmdCtx.Room, "알람 서비스가 초기화되지 않았습니다.")
@@ -55,7 +50,6 @@ func (c *AlarmCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContex
 	}
 }
 
-// handleAdd handles alarm addition
 func (c *AlarmCommand) handleAdd(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
 	memberName, hasMember := params["member"].(string)
 	if !hasMember || memberName == "" {
@@ -64,7 +58,6 @@ func (c *AlarmCommand) handleAdd(ctx context.Context, cmdCtx *domain.CommandCont
 
 	c.deps.Logger.Info("Alarm add requested", zap.String("member", memberName))
 
-	// Find member
 	channel, err := c.deps.Matcher.FindBestMatch(ctx, memberName)
 	if err != nil {
 		return c.deps.SendError(cmdCtx.Room, fmt.Sprintf("멤버 검색 중 오류: %v", err))
@@ -74,7 +67,6 @@ func (c *AlarmCommand) handleAdd(ctx context.Context, cmdCtx *domain.CommandCont
 		return c.deps.SendError(cmdCtx.Room, fmt.Sprintf("'%s' 멤버를 찾을 수 없습니다.", memberName))
 	}
 
-	// Add alarm
 	added, err := c.deps.Alarm.AddAlarm(ctx, cmdCtx.Room, cmdCtx.Sender, channel.ID, channel.Name)
 	if err != nil {
 		c.deps.Logger.Error("Failed to add alarm",
@@ -84,14 +76,12 @@ func (c *AlarmCommand) handleAdd(ctx context.Context, cmdCtx *domain.CommandCont
 		return c.deps.SendError(cmdCtx.Room, "알람 설정 중 오류가 발생했습니다.")
 	}
 
-	// Get next stream info
 	nextStreamInfo, _ := c.deps.Alarm.GetNextStreamInfo(ctx, channel.ID)
 
 	message := c.deps.Formatter.FormatAlarmAdded(channel.Name, added, nextStreamInfo)
 	return c.deps.SendMessage(cmdCtx.Room, message)
 }
 
-// handleRemove handles alarm removal
 func (c *AlarmCommand) handleRemove(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
 	memberName, hasMember := params["member"].(string)
 	if !hasMember || memberName == "" {
@@ -100,7 +90,6 @@ func (c *AlarmCommand) handleRemove(ctx context.Context, cmdCtx *domain.CommandC
 
 	c.deps.Logger.Info("Alarm remove requested", zap.String("member", memberName))
 
-	// Find member
 	channel, err := c.deps.Matcher.FindBestMatch(ctx, memberName)
 	if err != nil {
 		return c.deps.SendError(cmdCtx.Room, fmt.Sprintf("멤버 검색 중 오류: %v", err))
@@ -110,7 +99,6 @@ func (c *AlarmCommand) handleRemove(ctx context.Context, cmdCtx *domain.CommandC
 		return c.deps.SendError(cmdCtx.Room, fmt.Sprintf("'%s' 멤버를 찾을 수 없습니다.", memberName))
 	}
 
-	// Remove alarm
 	removed, err := c.deps.Alarm.RemoveAlarm(ctx, cmdCtx.Room, cmdCtx.Sender, channel.ID)
 	if err != nil {
 		c.deps.Logger.Error("Failed to remove alarm",
@@ -124,14 +112,12 @@ func (c *AlarmCommand) handleRemove(ctx context.Context, cmdCtx *domain.CommandC
 	return c.deps.SendMessage(cmdCtx.Room, message)
 }
 
-// handleList handles alarm list display
 func (c *AlarmCommand) handleList(ctx context.Context, cmdCtx *domain.CommandContext) error {
 	channelIDs, err := c.deps.Alarm.GetUserAlarms(ctx, cmdCtx.Room, cmdCtx.Sender)
 	if err != nil {
 		return c.deps.SendError(cmdCtx.Room, "알람 목록 조회 실패")
 	}
 
-	// Get member names for all alarms
 	alarmInfos := make([]adapter.AlarmListEntry, 0, len(channelIDs))
 	for _, channelID := range channelIDs {
 		memberName, err := c.deps.Alarm.GetMemberName(ctx, channelID)
@@ -149,7 +135,6 @@ func (c *AlarmCommand) handleList(ctx context.Context, cmdCtx *domain.CommandCon
 	return c.deps.SendMessage(cmdCtx.Room, message)
 }
 
-// handleClear handles clearing all alarms
 func (c *AlarmCommand) handleClear(ctx context.Context, cmdCtx *domain.CommandContext) error {
 	count, err := c.deps.Alarm.ClearUserAlarms(ctx, cmdCtx.Room, cmdCtx.Sender)
 	if err != nil {
