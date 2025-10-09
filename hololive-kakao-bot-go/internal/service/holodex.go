@@ -502,9 +502,12 @@ func (h *HolodexService) GetChannel(ctx context.Context, channelID string) (*dom
 }
 
 func (h *HolodexService) mapStreamsResponse(rawStreams []HolodexStreamRaw) []*domain.Stream {
-	streams := make([]*domain.Stream, len(rawStreams))
-	for i, raw := range rawStreams {
-		streams[i] = h.mapStreamResponse(&raw)
+	streams := make([]*domain.Stream, 0, len(rawStreams))
+	for _, raw := range rawStreams {
+		stream := h.mapStreamResponse(&raw)
+		if stream != nil {
+			streams = append(streams, stream)
+		}
 	}
 	return streams
 }
@@ -520,14 +523,27 @@ func (h *HolodexService) mapStreamResponse(raw *HolodexStreamRaw) *domain.Stream
 		TopicID:   raw.TopicID,
 	}
 
-	if raw.ChannelID != nil {
+	// ChannelID 설정 (빈 문자열 체크)
+	if raw.ChannelID != nil && *raw.ChannelID != "" {
 		stream.ChannelID = *raw.ChannelID
-	} else if raw.Channel != nil {
+	} else if raw.Channel != nil && raw.Channel.ID != "" {
 		stream.ChannelID = raw.Channel.ID
+	} else {
+		// ChannelID가 없으면 invalid 데이터로 간주
+		h.logger.Warn("Stream missing ChannelID - skipping",
+			zap.String("stream_id", raw.ID),
+			zap.String("title", raw.Title))
+		return nil
 	}
 
-	if raw.Channel != nil {
+	// ChannelName 설정 (빈 문자열 체크)
+	if raw.Channel != nil && raw.Channel.Name != "" {
 		stream.ChannelName = raw.Channel.Name
+	} else {
+		// ChannelName이 없어도 ChannelID가 있으면 허용
+		h.logger.Debug("Stream missing ChannelName, will use ChannelID",
+			zap.String("stream_id", raw.ID),
+			zap.String("channel_id", stream.ChannelID))
 	}
 
 	if raw.StartScheduled != nil && *raw.StartScheduled != "" {

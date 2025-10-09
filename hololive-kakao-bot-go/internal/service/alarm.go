@@ -275,7 +275,8 @@ func (as *AlarmService) checkChannel(ctx context.Context, channelID string) *cha
 		return &channelCheckResult{channelID: channelID, subscribers: []string{}, streams: []*domain.Stream{}}
 	}
 
-	as.logger.Info("Channel subscribers", zap.String("channel_id", channelID), zap.Int("count", len(subscribers)))
+	// 채널 구독자 수 로그 (필요시 활성화)
+	// as.logger.Info("Channel subscribers", zap.String("channel_id", channelID), zap.Int("count", len(subscribers)))
 
 	if len(subscribers) == 0 {
 		as.cache.SRem(ctx, AlarmChannelRegistryKey, []string{channelID})

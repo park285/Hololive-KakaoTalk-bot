@@ -12,9 +12,9 @@ echo "[REBUILD] Rebuilding Hololive KakaoTalk Bot (Go)..."
 echo "[CLEAN] Cleaning build cache..."
 go clean -cache
 
-# Build
-echo "[BUILD] Building binary..."
-time go build -o bin/bot ./cmd/bot
+# Build with optimizations
+echo "[BUILD] Building optimized binary (static + stripped + netgo)..."
+time CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o bin/bot ./cmd/bot
 
 # Check binary
 if [ -f "bin/bot" ]; then
