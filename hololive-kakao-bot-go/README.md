@@ -161,6 +161,3 @@ go test -cover ./internal/...
 Private Repository
 
 ---
-
-**원본 프로젝트**: [hololive-kakao-bot](../hololive-kakao-bot) (TypeScript)
-**저장소**: https://github.com/park285/Hololive-KakaoTalk-bot
