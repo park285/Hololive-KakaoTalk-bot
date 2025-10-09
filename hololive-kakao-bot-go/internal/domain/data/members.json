@@ -1,0 +1,1261 @@
+{
+  "version": "2.0.3",
+  "lastUpdated": "2025-10-08",
+  "sources": [
+    "PostgreSQL holo_oshi_db (member_enriched_data)",
+    "member_channel_ids.json",
+    "member_aliases.json"
+  ],
+  "members": [
+    {
+      "channelId": "UC0TXe_LYZ4scaW2XMyi5_kw",
+      "name": "AZKi",
+      "aliases": {
+        "ko": [
+          "아즈짱",
+          "아즈키치",
+          "아즈키",
+          "지도_마스터"
+        ],
+        "ja": [
+          "AZKi Channel",
+          "AZKi"
+        ]
+      },
+      "nameJa": "AZKi",
+      "nameKo": "아즈키"
+    },
+    {
+      "channelId": "UCAoy6rzhSf4ydcYjJw3WoVg",
+      "name": "Airani Iofifteen",
+      "aliases": {
+        "ko": [
+          "다국어천재",
+          "외계공주",
+          "이오피"
+        ],
+        "ja": [
+          "Airani Iofifteen Channel hololive-ID",
+          "Airani Iofifteen hololive-ID"
+        ]
+      },
+      "nameJa": "アイラニ・イオフィフティーン",
+      "nameKo": "아이라니 이오피프틴"
+    },
+    {
+      "channelId": "UC1CfXB_kRs3C-zaeTG3oGyg",
+      "name": "Akai Haato",
+      "aliases": {
+        "ko": [
+          "아카이하아토",
+          "하쨔마",
+          "하챠마",
+          "하토"
+        ],
+        "ja": [
+          "HAACHAMA Ch 赤井はあと"
+        ]
+      },
+      "nameJa": "赤井はあと",
+      "nameKo": "아카이 하아토"
+    },
+    {
+      "channelId": "UCFTLzh12_nrtzqBPsTCqenA",
+      "name": "Aki Rosenthal",
+      "aliases": {
+        "ko": [
+          "아키로젠탈",
+          "무키로제",
+          "아키",
+          "아키로제",
+          "아키아키"
+        ],
+        "ja": [
+          "アキロゼCh。Vtuber/ホロライブ所属",
+          "アキロゼ"
+        ]
+      },
+      "nameJa": "アキ・ローゼンタール",
+      "nameKo": "아키 로젠탈"
+    },
+    {
+      "channelId": "UCZlDXzGoo7d44bwdNObFacg",
+      "name": "Amane Kanata",
+      "aliases": {
+        "ko": [
+          "PP천사",
+          "고릴라",
+          "카나타",
+          "카나땅",
+          "아마네",
+          "아마네카나타"
+        ],
+        "ja": [
+          "Kanata Ch. 天音かなた",
+          "Kanata 天音かなた",
+          "天音かなた"
+        ]
+      },
+      "nameJa": "天音かなた",
+      "nameKo": "아마네 카나타"
+    },
+    {
+      "channelId": "UC727SQYUvx5pDDGQpTICNWg",
+      "name": "Anya Melfissa",
+      "aliases": {
+        "ko": [
+          "단검",
+          "아냐",
+          "아냐멜피샤",
+          "조용한_살인마"
+        ],
+        "ja": [
+          "Anya Melfissa Ch. hololive-ID",
+          "Anya Melfissa hololive-ID"
+        ]
+      },
+      "nameJa": "アーニャ・メルフィッサ",
+      "nameKo": "아냐 멜피사"
+    },
+    {
+      "channelId": "UCOyYb1c43VlX9rc_lT6NKQw",
+      "name": "Ayunda Risu",
+      "aliases": {
+        "ko": [
+          "리수",
+          "리스",
+          "아윤다리스",
+          "아윤다"
+        ],
+        "ja": [
+          "Ayunda Risu Ch. hololive-ID",
+          "Ayunda Risu hololive-ID"
+        ]
+      },
+      "nameJa": "アユンダ・リス",
+      "nameKo": "아윤다 리스"
+    },
+    {
+      "channelId": "UCvN5h1ShZtc7nly3pezRayg",
+      "name": "Cecilia Immergreen",
+      "aliases": {
+        "ja": [
+          "Cecilia Immergreen Ch. hololive-EN",
+          "Cecilia Immergreen hololive-EN"
+        ]
+      },
+      "nameJa": "セシリア・イマーグリーン",
+      "nameKo": "세실리아 이머그린"
+    },
+    {
+      "channelId": "UCO_aKKYxn4tvrqPjcTzZ6EQ",
+      "name": "Ceres Fauna",
+      "nameJa": "セレス・ファウナ",
+      "nameKo": "세레스 파우나",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "파우나",
+          "세레스파우나",
+          "사슴"
+        ],
+        "ja": [
+          "Ceres Fauna Ch. hololive-EN",
+          "セレス・ファウナ"
+        ]
+      }
+    },
+    {
+      "channelId": "UCW5uhrG1eCBYditmhL0Ykjw",
+      "name": "Elizabeth Rose Bloodflame",
+      "aliases": {
+        "ko": [
+          "블러드플레임",
+          "엘리자베스",
+          "엘리",
+          "엘리자베스로즈블러드플레임",
+          "여왕"
+        ],
+        "ja": [
+          "Elizabeth Rose Bloodflame Ch. hololive-EN",
+          "Elizabeth Rose Bloodflame hololive-EN"
+        ]
+      },
+      "nameJa": "エリザベス・ローズ・ブラッドフレイム",
+      "nameKo": "엘리자베스 로즈 블러드플레임"
+    },
+    {
+      "channelId": "UCt9H_RpQzhxzlyBxFqrdHqA",
+      "name": "FuwaMoco",
+      "aliases": {
+        "ko": [
+          "바우바우",
+          "후와와",
+          "모코코",
+          "후와모코"
+        ],
+        "ja": [
+          "FUWAMOCO Ch. hololive-EN",
+          "FUWAMOCO hololive-EN"
+        ]
+      },
+      "nameJa": "FUWAMOCO Ch. hololive-EN",
+      "nameKo": "후와모코"
+    },
+    {
+      "channelId": "UCoSrY_IQQVpmIRZ9Xf-y93g",
+      "name": "Gawr Gura",
+      "nameJa": "がうる・ぐら",
+      "nameKo": "가우르 구라",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "구라",
+          "가우르구라",
+          "상어"
+        ],
+        "ja": [
+          "Gawr Gura Ch. hololive-EN",
+          "がうる・ぐら"
+        ]
+      }
+    },
+    {
+      "channelId": "UCDHABijvPBnJm7F-KlNME3w",
+      "name": "Gigi Murin",
+      "aliases": {
+        "ja": [
+          "Gigi Murin Ch. hololive-EN",
+          "Gigi Murin hololive-EN"
+        ]
+      },
+      "nameJa": "ジジ・ムリン",
+      "nameKo": "지지 무린"
+    },
+    {
+      "channelId": "UCgmPnx-EEeOrZSg5Tiw7ZRQ",
+      "name": "Hakos Baelz",
+      "aliases": {
+        "ko": [
+          "벨즈",
+          "베이",
+          "땃쥐",
+          "카오스"
+        ],
+        "ja": [
+          "Hakos Baelz Ch. hololive-EN",
+          "Hakos Baelz hololive-EN"
+        ]
+      },
+      "nameJa": "ハコス・ベールズ",
+      "nameKo": "하코스 벨즈"
+    },
+    {
+      "channelId": "UC6eWCld0KwmyHFbAqK3V-Rw",
+      "name": "Hakui Koyori",
+      "aliases": {
+        "ko": [
+          "방송_괴물",
+          "코요",
+          "코요리",
+          "코요링"
+        ],
+        "ja": [
+          "Koyori ch. 博衣こより - holoX -",
+          "Koyori 博衣こより - holoX -",
+          "博衣こより"
+        ]
+      },
+      "nameJa": "博衣こより",
+      "nameKo": "하쿠이 코요리"
+    },
+    {
+      "channelId": "UCa9Y57gfeY0Zro_noHRVrnw",
+      "name": "Himemori Luna",
+      "aliases": {
+        "ko": [
+          "루나",
+          "루나이트",
+          "응나아아"
+        ],
+        "ja": [
+          "Luna Ch. 姫森ルーナ",
+          "Luna 姫森ルーナ",
+          "姫森ルーナ"
+        ]
+      },
+      "nameJa": "姫森ルーナ",
+      "nameKo": "히메모리 루나"
+    },
+    {
+      "channelId": "UCMGfV7TVTmHhEErVJg1oHBQ",
+      "name": "Hiodoshi Ao",
+      "nameJa": "火威青",
+      "nameKo": "히오도시 아오",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "아오",
+          "히오도시아오"
+        ],
+        "ja": [
+          "Ao Ch. 火威青 ‐ ReGLOSS",
+          "火威青"
+        ]
+      }
+    },
+    {
+      "channelId": "UC5CwaMl1eIgY8h02uZw7u8A",
+      "name": "Hoshimachi Suisei",
+      "aliases": {
+        "ko": [
+          "스이짱",
+          "스이",
+          "스이세이",
+          "스이코패스"
+        ],
+        "ja": [
+          "Suisei Channel",
+          "Suisei"
+        ]
+      },
+      "nameJa": "星街すいせい",
+      "nameKo": "호시마치 스이세이"
+    },
+    {
+      "channelId": "UCCzUftO8KOVkV4wQG1vkUvg",
+      "name": "Houshou Marine",
+      "aliases": {
+        "ko": [
+          "마리링",
+          "마린",
+          "아줌마",
+          "할망구"
+        ],
+        "ja": [
+          "Marine Ch. 宝鐘マリン",
+          "Marine 宝鐘マリン"
+        ]
+      },
+      "nameJa": "宝鐘マリン",
+      "nameKo": "호쇼 마린"
+    },
+    {
+      "channelId": "UCtyWhCj3AqKh2dXctLkDtng",
+      "name": "Ichijou Ririka",
+      "aliases": {
+        "ko": [
+          "CEO",
+          "사장님",
+          "리리카",
+          "사업가"
+        ],
+        "ja": [
+          "Ririka Ch. 一条莉々華 ‐ ReGLOSS",
+          "Ririka 一条莉々華 ‐ ReGLOSS"
+        ]
+      },
+      "nameJa": "一条莉々華",
+      "nameKo": "이치죠 리리카"
+    },
+    {
+      "channelId": "UChAnqc_AY5_I3Px5dig3X1Q",
+      "name": "Inugami Korone",
+      "aliases": {
+        "ko": [
+          "개이모",
+          "코로네",
+          "코로네스키"
+        ],
+        "ja": [
+          "Korone Ch. 戌神ころね",
+          "Korone 戌神ころね",
+          "戌神ころね"
+        ]
+      },
+      "nameJa": "戌神ころね",
+      "nameKo": "이누가미 코로네"
+    },
+    {
+      "channelId": "UC9LSiN9hXI55svYEBrrK-tw",
+      "name": "Isaki Riona",
+      "aliases": {
+        "ko": [
+          "리더",
+          "리오나",
+          "차가운_미인"
+        ],
+        "ja": [
+          "Riona Ch. 響咲リオナ - FLOW GLOW",
+          "Riona 響咲リオナ - FLOW GLOW"
+        ]
+      },
+      "nameJa": "響咲リオナ",
+      "nameKo": "이사키 리오나"
+    },
+    {
+      "channelId": "UCdXAk5MpyLD8594lm_OvtGQ",
+      "name": "Juufuutei Raden",
+      "aliases": {
+        "ko": [
+          "라덴",
+          "박물관_관장",
+          "전통미인"
+        ],
+        "ja": [
+          "Raden Ch. 儒烏風亭らでん ‐ ReGLOSS",
+          "Raden 儒烏風亭らでん ‐ ReGLOSS"
+        ]
+      },
+      "nameJa": "儒烏風亭らでん",
+      "nameKo": "주후테이 라덴"
+    },
+    {
+      "channelId": "UCZLZ8Jjx_RN2CXloOmgTHVg",
+      "name": "Kaela Kovalskia",
+      "aliases": {
+        "ko": [
+          "대장장이",
+          "지구력_여왕",
+          "카엘라"
+        ],
+        "ja": [
+          "Kaela Kovalskia Ch. hololive-ID",
+          "Kaela Kovalskia hololive-ID"
+        ]
+      },
+      "nameJa": "カエラ・コヴァルスキア",
+      "nameKo": "카엘라 코발스키아"
+    },
+    {
+      "channelId": "UC_vMYWcDjmfdpH6r4TTn1MQ",
+      "name": "Kazama Iroha",
+      "aliases": {
+        "ko": [
+          "고자루",
+          "닌자",
+          "우버_고자루",
+          "이로하"
+        ],
+        "ja": [
+          "Iroha ch. 風真いろは - holoX -",
+          "Iroha 風真いろは - holoX -",
+          "風真いろは"
+        ]
+      },
+      "nameJa": "風真いろは",
+      "nameKo": "카자마 이로하"
+    },
+    {
+      "channelId": "UCGzTVXqMQHa4AgJVJIVvtDQ",
+      "name": "Kikirara Vivi",
+      "aliases": {
+        "ko": [
+          "덜렁이_게이머",
+          "비비",
+          "전설의_농부_타카시",
+          "화백"
+        ],
+        "ja": [
+          "Vivi Ch. 綺々羅々ヴィヴィ - FLOW GLOW",
+          "Vivi 綺々羅々ヴィヴィ - FLOW GLOW"
+        ]
+      },
+      "nameJa": "綺々羅々ヴィヴィ",
+      "nameKo": "키키라라 비비"
+    },
+    {
+      "channelId": "UCS9uQI-jC3DE0L4IpXyvr6w",
+      "name": "Kiryu Coco",
+      "nameJa": "桐生ココ",
+      "nameKo": "키류 코코",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "코코",
+          "키류코코",
+          "회장"
+        ],
+        "ja": [
+          "Coco Ch. 桐生ココ",
+          "桐生ココ"
+        ]
+      }
+    },
+    {
+      "channelId": "UCjLEmnpCNeisMxy134KPwWw",
+      "name": "Kobo Kanaeru",
+      "aliases": {
+        "ko": [
+          "공주",
+          "코보",
+          "코보짱"
+        ],
+        "ja": [
+          "Kobo Kanaeru Ch. hololive-ID",
+          "Kobo Kanaeru hololive-ID"
+        ]
+      },
+      "nameJa": "こぼ・かなえる",
+      "nameKo": "코보 카나에루"
+    },
+    {
+      "channelId": "UCuI_opAVX6qbxZY-a-AxFuQ",
+      "name": "Koganei Niko",
+      "aliases": {
+        "ko": [
+          "개그맨",
+          "니코",
+          "키다리"
+        ],
+        "ja": [
+          "Niko Ch. 虎金妃笑虎 - FLOW GLOW",
+          "Niko 虎金妃笑虎 - FLOW GLOW"
+        ]
+      },
+      "nameJa": "虎金妃笑虎",
+      "nameKo": "코가네이 니코"
+    },
+    {
+      "channelId": "UC9p_lqQ0FEDz327Vgf5JwqA",
+      "name": "Koseki Bijou",
+      "aliases": {
+        "ko": [
+          "다이아몬드",
+          "보석",
+          "비주",
+          "비쥬"
+        ],
+        "ja": [
+          "Koseki Bijou Ch. hololive-EN",
+          "Koseki Bijou hololive-EN"
+        ]
+      },
+      "nameJa": "古石ビジュー",
+      "nameKo": "코세키 비쥬"
+    },
+    {
+      "channelId": "UCYz_5n-uDuChHtLo7My1HnQ",
+      "name": "Kureiji Ollie",
+      "aliases": {
+        "ko": [
+          "시끄러운_좀비",
+          "올리",
+          "하이텐션_좀비"
+        ],
+        "ja": [
+          "Kureiji Ollie Ch. hololive-ID",
+          "Kureiji Ollie hololive-ID"
+        ]
+      },
+      "nameJa": "クレイジー・オリー",
+      "nameKo": "쿠레이지 올리"
+    },
+    {
+      "channelId": "UCENwRMx5Yh42zWpzURebzTw",
+      "name": "La+ Darknesss",
+      "aliases": {
+        "ko": [
+          "동구리",
+          "라프",
+          "라플라스",
+          "다크니스",
+          "야마다",
+          "쿠소가키"
+        ],
+        "ja": [
+          "Laplus ch. ラプラス・ダークネス - holoX -",
+          "Laplus ラプラス・ダークネス - holoX -",
+          "ラプラス"
+        ]
+      },
+      "nameJa": "ラプラス・ダークネス",
+      "nameKo": "라플라스 다크니스"
+    },
+    {
+      "channelId": "UC1opHUrw8rvnsadT-iGp7Cg",
+      "name": "Minato Aqua",
+      "nameJa": "湊あくあ",
+      "nameKo": "미나토 아쿠아",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "아쿠아",
+          "미나토아쿠아",
+          "온리온"
+        ],
+        "ja": [
+          "Aqua Ch. 湊あくあ",
+          "湊あくあ"
+        ]
+      }
+    },
+    {
+      "channelId": "UCjk2nKmHzgH5Xy-C5qYRd5A",
+      "name": "Mizumiya Su",
+      "aliases": {
+        "ko": [
+          "여아",
+          "스우",
+          "미즈미야",
+          "작다"
+        ],
+        "ja": [
+          "Su Ch. 水宮枢 - FLOW GLOW",
+          "Su 水宮枢 - FLOW GLOW"
+        ]
+      },
+      "nameJa": "水宮枢",
+      "nameKo": "미즈미야 스우"
+    },
+    {
+      "channelId": "UCAWSyEs_Io8MtpY3m-zqILA",
+      "name": "Momosuzu Nene",
+      "aliases": {
+        "ko": [
+          "네네",
+          "네네프로",
+          "넷코"
+        ],
+        "ja": [
+          "Nene Ch.桃鈴ねね",
+          "Nene 桃鈴ねね",
+          "桃鈴ねね"
+        ]
+      },
+      "nameJa": "桃鈴ねね",
+      "nameKo": "모모스즈 네네"
+    },
+    {
+      "channelId": "UCP0BspO_AMEe3aQqqpo89Dg",
+      "name": "Moona Hoshinova",
+      "aliases": {
+        "ko": [
+          "건축왕",
+          "달토끼",
+          "무나"
+        ],
+        "ja": [
+          "Moona Hoshinova hololive-ID"
+        ]
+      },
+      "nameJa": "ムーナ・ホシノヴァ",
+      "nameKo": "무나 호시노바"
+    },
+    {
+      "channelId": "UCL_qhgtOy0dy1Agp8vkySQg",
+      "name": "Mori Calliope",
+      "aliases": {
+        "ko": [
+          "칼버지",
+          "동공지진",
+          "칼리"
+        ],
+        "ja": [
+          "Mori Calliope Ch. hololive-EN",
+          "Mori Calliope hololive-EN"
+        ]
+      },
+      "nameJa": "森カリオペ",
+      "nameKo": "모리 칼리오페"
+    },
+    {
+      "channelId": "UCXTpFs_3PqI41qX2d9tL2Rw",
+      "name": "Murasaki Shion",
+      "nameJa": "紫咲シオン",
+      "nameKo": "무라사키 시온",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "시온",
+          "무라사키시온",
+          "쿠소가키"
+        ],
+        "ja": [
+          "Shion Ch. 紫咲シオン",
+          "紫咲シオン"
+        ]
+      }
+    },
+    {
+      "channelId": "UC7fk0CB07ly8oSl0aqKkqFg",
+      "name": "Nakiri Ayame",
+      "aliases": {
+        "ko": [
+          "나키리아야메",
+          "나키리",
+          "나키륨",
+          "아야메",
+          "오니"
+        ],
+        "ja": [
+          "Nakiri Ayame Ch. 百鬼あやめ",
+          "Nakiri Ayame 百鬼あやめ"
+        ]
+      },
+      "nameJa": "百鬼あやめ",
+      "nameKo": "나키리 아야메"
+    },
+    {
+      "channelId": "UC3n5uGu18FoCy23ggWWp8tA",
+      "name": "Nanashi Mumei",
+      "nameJa": "七詩ムメイ",
+      "nameKo": "나나시 무메이",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "무메이",
+          "나나시무메이",
+          "부엉이"
+        ],
+        "ja": [
+          "Nanashi Mumei Ch. hololive-EN",
+          "七詩ムメイ"
+        ]
+      }
+    },
+    {
+      "channelId": "UCQ0UDLQCjY0rmuxCDE38FGg",
+      "name": "Natsuiro Matsuri",
+      "aliases": {
+        "ko": [
+          "마츠리",
+          "마츠리_라인",
+          "마츠리스"
+        ],
+        "ja": [
+          "Matsuri Channel 夏色まつり",
+          "Matsuri 夏色まつり",
+          "夏色まつり"
+        ]
+      },
+      "nameJa": "夏色まつり",
+      "nameKo": "나츠이로 마츠리"
+    },
+    {
+      "channelId": "UCvaTdHTWBGv3MKj3KVqJVCw",
+      "name": "Nekomata Okayu",
+      "aliases": {
+        "ko": [
+          "오카융",
+          "오카유",
+          "장난꾸러기_고양이"
+        ],
+        "ja": [
+          "Okayu Ch. 猫又おかゆ",
+          "Okayu 猫又おかゆ"
+        ]
+      },
+      "nameJa": "猫又おかゆ",
+      "nameKo": "네코마타 오카유"
+    },
+    {
+      "channelId": "UC_sFNM0z0MWm9A6WlKPuMMg",
+      "name": "Nerissa Ravencroft",
+      "aliases": {
+        "ko": [
+          "까마귀",
+          "네리사",
+          "데몬_새"
+        ],
+        "ja": [
+          "Nerissa Ravencroft Ch. hololive-EN",
+          "Nerissa Ravencroft hololive-EN"
+        ]
+      },
+      "nameJa": "ネリッサ・レイヴンクロフト",
+      "nameKo": "네리사 레이븐크로프트"
+    },
+    {
+      "channelId": "UCMwGHR0BTZuLsmjY_NT5Pwg",
+      "name": "Ninomae Ina'nis",
+      "aliases": {
+        "ko": [
+          "이나",
+          "타코다치",
+          "포옹_수집가",
+          "흑막"
+        ],
+        "ja": [
+          "Ninomae Ina'nis Ch. hololive-EN",
+          "Ninomae Ina'nis hololive-EN"
+        ]
+      },
+      "nameJa": "一伊那尓栖",
+      "nameKo": "니노마에 이나니스"
+    },
+    {
+      "channelId": "UCK9V2B22uJYu3N7eR_BT9QA",
+      "name": "Omaru Polka",
+      "aliases": {
+        "ko": [
+          "POLmao",
+          "포루카_오루카",
+          "포루펠러",
+          "폴카"
+        ],
+        "ja": [
+          "Polka Ch. 尾丸ポルカ",
+          "Polka 尾丸ポルカ",
+          "尾丸ポルカ"
+        ]
+      },
+      "nameJa": "尾丸ポルカ",
+      "nameKo": "오마루 폴카"
+    },
+    {
+      "channelId": "UCp-5t9SrOQwXMU7iIjQfARg",
+      "name": "Ookami Mio",
+      "aliases": {
+        "ko": [
+          "미오",
+          "미오샤",
+          "미옹"
+        ],
+        "ja": [
+          "Mio Channel 大神ミオ",
+          "Mio 大神ミオ"
+        ]
+      },
+      "nameJa": "大神ミオ",
+      "nameKo": "오오카미 미오"
+    },
+    {
+      "channelId": "UCvzGlP9oQwU--Y0r9id_jnA",
+      "name": "Oozora Subaru",
+      "aliases": {
+        "ko": [
+          "메스바루",
+          "슈바_오리",
+          "스바루",
+          "오오조라_경찰"
+        ],
+        "ja": [
+          "Subaru Ch. 大空スバル",
+          "Subaru 大空スバル",
+          "大空スバル"
+        ]
+      },
+      "nameJa": "大空スバル",
+      "nameKo": "오오조라 스바루"
+    },
+    {
+      "channelId": "UCWQtYtq9EOB4-I5P-3fh8lA",
+      "name": "Otonose Kanade",
+      "aliases": {
+        "ko": [
+          "조선우노",
+          "연주",
+          "카나데"
+        ],
+        "ja": [
+          "Kanade Ch. 音乃瀬奏 ‐ ReGLOSS",
+          "Kanade 音乃瀬奏 ‐ ReGLOSS"
+        ]
+      },
+      "nameJa": "音乃瀬奏",
+      "nameKo": "오토노세 카나데"
+    },
+    {
+      "channelId": "UCmbs8T6MWqUHP1tIQvSgKrg",
+      "name": "Ouro Kronii",
+      "aliases": {
+        "ko": [
+          "곽로니",
+          "구론희",
+          "빙구"
+        ],
+        "ja": [
+          "Ouro Kronii Ch. hololive-EN",
+          "Ouro Kronii hololive-EN"
+        ]
+      },
+      "nameJa": "オーロ・クロニー",
+      "nameKo": "오로 크로니"
+    },
+    {
+      "channelId": "UChgTyjG-pdNvxxhdsXfHQ5Q",
+      "name": "Pavolia Reine",
+      "aliases": {
+        "ko": [
+          "공작_공주",
+          "레이네",
+          "우아한_공작"
+        ],
+        "ja": [
+          "Pavolia Reine Ch. hololive-ID",
+          "Pavolia Reine hololive-ID"
+        ]
+      },
+      "nameJa": "パヴォリア・レイネ",
+      "nameKo": "파볼리아 레이네"
+    },
+    {
+      "channelId": "UCl69AEx4MdqMZH7Jtsm7Tig",
+      "name": "Raora Panthera",
+      "aliases": {
+        "ja": [
+          "Raora Panthera Ch. hololive-EN",
+          "Raora Panthera hololive-EN"
+        ]
+      },
+      "nameJa": "ラオーラ・パンテーラ",
+      "nameKo": "라오라 판테라"
+    },
+    {
+      "channelId": "UCKMWFR6lAstLa7Vbf5dH7ig",
+      "name": "Rindo Chihaya",
+      "aliases": {
+        "ko": [
+          "DJ",
+          "드라이버",
+          "치하야"
+        ],
+        "ja": [
+          "Chihaya Ch. 輪堂 千速 - FLOW GLOW",
+          "Chihaya 輪堂 千速 - FLOW GLOW"
+        ]
+      },
+      "nameJa": "輪堂千速",
+      "nameKo": "린도 치하야"
+    },
+    {
+      "channelId": "UCDqI2jOz0weumE8s7paEk6g",
+      "name": "Roboco-san",
+      "aliases": {
+        "ko": [
+          "고성능_로봇",
+          "로보짱",
+          "로보코",
+          "사출로봇"
+        ],
+        "ja": [
+          "Roboco Ch. - ロボ子",
+          "Roboco - ロボ子",
+          "ロボ子さん"
+        ]
+      },
+      "nameJa": "ロボ子さん",
+      "nameKo": "로보코상"
+    },
+    {
+      "channelId": "UCIBY1ollUsauvVi4hW4cumw",
+      "name": "Sakamata Chloe",
+      "nameJa": "沙花叉クロヱ",
+      "nameKo": "사카마타 클로에",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "클로에",
+          "사카마타클로에",
+          "범고래"
+        ],
+        "ja": [
+          "Chloe ch. 沙花叉クロヱ - holoX -",
+          "沙花叉クロヱ"
+        ]
+      }
+    },
+    {
+      "channelId": "UC-hM6YJuNYVAmUWxeIr9FeA",
+      "name": "Sakura Miko",
+      "aliases": {
+        "ko": [
+          "35P",
+          "미코",
+          "미코치",
+          "엘리트"
+        ],
+        "ja": [
+          "Miko Ch. さくらみこ",
+          "Miko さくらみこ",
+          "さくらみこ"
+        ]
+      },
+      "nameJa": "さくらみこ",
+      "nameKo": "사쿠라 미코"
+    },
+    {
+      "channelId": "UCgnfPPb9JI3e9A4cXHnWbyg",
+      "name": "Shiori Novella",
+      "aliases": {
+        "ko": [
+          "사서",
+          "시오리",
+          "책벌레"
+        ],
+        "ja": [
+          "Shiori Novella Ch. hololive-EN",
+          "Shiori Novella hololive-EN"
+        ]
+      },
+      "nameJa": "シオリ・ノヴェラ",
+      "nameKo": "시오리 노벨라"
+    },
+    {
+      "channelId": "UCdn5BQ06XqgXoAxIhbqw5Rg",
+      "name": "Shirakami Fubuki",
+      "aliases": {
+        "ko": [
+          "쿠로카미_후부키",
+          "후부키",
+          "국왕님"
+        ],
+        "ja": [
+          "フブキCh。白上フブキ",
+          "白上フブキ"
+        ]
+      },
+      "nameJa": "白上フブキ",
+      "nameKo": "시라카미 후부키"
+    },
+    {
+      "channelId": "UCvInZx9h3jC2JzsIzoOebWg",
+      "name": "Shiranui Flare",
+      "aliases": {
+        "ko": [
+          "플레어",
+          "후땅",
+          "후레아_쨩"
+        ],
+        "ja": [
+          "Flare Ch. 不知火フレア",
+          "Flare 不知火フレア",
+          "不知火フレア"
+        ]
+      },
+      "nameJa": "不知火フレア",
+      "nameKo": "시라누이 후레아"
+    },
+    {
+      "channelId": "UCdyqAaZDKHXg4Ahi7VENThQ",
+      "name": "Shirogane Noel",
+      "aliases": {
+        "ko": [
+          "노엘",
+          "단장"
+        ],
+        "ja": [
+          "Noel Ch. 白銀ノエル",
+          "Noel 白銀ノエル"
+        ]
+      },
+      "nameJa": "白銀ノエル",
+      "nameKo": "시로가네 노엘"
+    },
+    {
+      "channelId": "UCUKD-uaobj9jiqB-VXt71mA",
+      "name": "Shishiro Botan",
+      "aliases": {
+        "ko": [
+          "라라이온",
+          "시시롱",
+          "보탄"
+        ],
+        "ja": [
+          "Botan Ch.獅白ぼたん",
+          "Botan 獅白ぼたん",
+          "獅白ぼたん"
+        ]
+      },
+      "nameJa": "獅白ぼたん",
+      "nameKo": "시시로 보탄"
+    },
+    {
+      "channelId": "UCHsx4Hqa-1ORjQTh9TYDhww",
+      "name": "Takanashi Kiara",
+      "aliases": {
+        "ko": [
+          "KFP_점장",
+          "새대가리",
+          "치킨",
+          "키아라"
+        ],
+        "ja": [
+          "Takanashi Kiara Ch. hololive-EN",
+          "Takanashi Kiara hololive-EN"
+        ]
+      },
+      "nameJa": "小鳥遊キアラ",
+      "nameKo": "타카나시 키아라"
+    },
+    {
+      "channelId": "UCs9_O1tRPMQTHQ-N_L6FU2g",
+      "name": "Takane Lui",
+      "aliases": {
+        "ko": [
+          "루이",
+          "루이모",
+          "마성의_여자"
+        ],
+        "ja": [
+          "Lui ch. 鷹嶺ルイ - holoX -",
+          "Lui 鷹嶺ルイ - holoX -",
+          "鷹嶺ルイ"
+        ]
+      },
+      "nameJa": "鷹嶺ルイ",
+      "nameKo": "타카네 루이"
+    },
+    {
+      "channelId": "UC1iA6_NT4mtAcIII6ygrvCw",
+      "name": "Todoroki Hajime",
+      "aliases": {
+        "ko": [
+          "하듸메",
+          "하지메"
+        ],
+        "ja": [
+          "Hajime Ch. 轟はじめ ‐ ReGLOSS",
+          "Hajime 轟はじめ ‐ ReGLOSS"
+        ]
+      },
+      "nameJa": "轟はじめ",
+      "nameKo": "토도로키 하지메"
+    },
+    {
+      "channelId": "UCp6993wxpyDPHUpavwDFqgg",
+      "name": "Tokino Sora",
+      "aliases": {
+        "ko": [
+          "사단장",
+          "소라",
+          "소라토모",
+          "토키노소라"
+        ],
+        "ja": [
+          "SoraCh. ときのそらチャンネル",
+          "Sora ときのそらチャンネル",
+          "ときのそら"
+        ]
+      },
+      "nameJa": "ときのそら",
+      "nameKo": "토키노 소라"
+    },
+    {
+      "channelId": "UC1uv2Oq6kNxgATlCiez59hw",
+      "name": "Tokoyami Towa",
+      "aliases": {
+        "ko": [
+          "TMT",
+          "토와",
+          "토와마지텐시"
+        ],
+        "ja": [
+          "Towa Ch. 常闇トワ",
+          "Towa 常闇トワ",
+          "常闇トワ"
+        ]
+      },
+      "nameJa": "常闇トワ",
+      "nameKo": "토코야미 토와"
+    },
+    {
+      "channelId": "UCsUj0dszADCGbF3gNrQEuSQ",
+      "name": "Tsukumo Sana",
+      "nameJa": "九十九佐命",
+      "nameKo": "츠쿠모 사나",
+      "isGraduated": true,
+      "aliases": {
+        "ko": [
+          "사나",
+          "츠쿠모사나"
+        ],
+        "ja": [
+          "Tsukumo Sana Ch. hololive-EN",
+          "九十九佐命"
+        ]
+      }
+    },
+    {
+      "channelId": "UCqm3BQLlJfvkTsX_hvm0UmA",
+      "name": "Tsunomaki Watame",
+      "aliases": {
+        "ko": [
+          "양이모",
+          "와타메",
+          "와타오지"
+        ],
+        "ja": [
+          "Watame Ch. 角巻わため",
+          "Watame 角巻わため",
+          "角巻わため"
+        ]
+      },
+      "nameJa": "角巻わため",
+      "nameKo": "츠노마키 와타메"
+    },
+    {
+      "channelId": "UC1DCedRgGHBdm81E1llLhOQ",
+      "name": "Usada Pekora",
+      "aliases": {
+        "ko": [
+          "페코",
+          "아몬드",
+          "페코라"
+        ],
+        "ja": [
+          "Pekora Ch. 兎田ぺこら",
+          "Pekora 兎田ぺこら",
+          "兎田ぺこら"
+        ]
+      },
+      "nameJa": "兎田ぺこら",
+      "nameKo": "우사다 페코라"
+    },
+    {
+      "channelId": "UCTvHWSfBZgtxE4sILOaurIQ",
+      "name": "Vestia Zeta",
+      "aliases": {
+        "ko": [
+          "고양이_요원",
+          "비밀요원",
+          "제타"
+        ],
+        "ja": [
+          "Vestia Zeta Ch. hololive-ID",
+          "Vestia Zeta hololive-ID"
+        ]
+      },
+      "nameJa": "ベスティア・ゼータ",
+      "nameKo": "베스티아 제타"
+    },
+    {
+      "channelId": "UCFKOVgVbGmX65RxO3EtH3iw",
+      "name": "Yukihana Lamy",
+      "aliases": {
+        "ko": [
+          "유키하나라미",
+          "꽐라미",
+          "라미"
+        ],
+        "ja": [
+          "Lamy Ch. 雪花ラミィ",
+          "Lamy 雪花ラミィ",
+          "雪花ラミィ"
+        ]
+      },
+      "nameJa": "雪花ラミィ",
+      "nameKo": "유키하나 라미"
+    },
+    {
+      "channelId": "UC1suqwovbL1kzsoaZgFZLKg",
+      "name": "Yuzuki Choco",
+      "aliases": {
+        "ko": [
+          "유즈키초코",
+          "유즈키",
+          "초코",
+          "초코선생",
+          "초코센"
+        ],
+        "ja": [
+          "Choco Ch. 癒月ちょこ",
+          "Choco 癒月ちょこ"
+        ]
+      },
+      "nameJa": "癒月ちょこ",
+      "nameKo": "유즈키 초코"
+    }
+  ]
+}

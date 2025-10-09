@@ -1,0 +1,60 @@
+{
+  "slug": "harusaki-nodoka",
+  "english_name": "Harusaki Nodoka",
+  "japanese_name": "Harusaki Nodoka",
+  "catchphrase": "「おはようございます！春先のどかです✨」",
+  "description": "ホロライブプロダクション「holoAN（ホロアナ）」所属の新人アナウンサー。\n「自身の声や言葉で、みなさんの日常を少しでも安心させられる存在になる」ことが夢。\nしっかり者に見えて、おっちょこちょいな面も。カエルが好き。",
+  "data_entries": [
+    {
+      "label": "誕生日",
+      "value": "5月7日"
+    },
+    {
+      "label": "初出演日",
+      "value": "2022年4月1日"
+    },
+    {
+      "label": "身長",
+      "value": "154cm"
+    },
+    {
+      "label": "ユニット",
+      "value": "holoAN"
+    },
+    {
+      "label": "イラストレーター",
+      "value": "おるだん"
+    },
+    {
+      "label": "夢",
+      "value": "・ホロライブメンバーの夢を一緒に叶えること。\n・自身の声や言葉で、みなさんの日常を少しでも安心させられる存在になること。\n・先輩のように、強くてすてきなひとになること。"
+    },
+    {
+      "label": "ハッシュタグ",
+      "value": "配信タグ：#はるさきじかん\nファンアート：#のどかあーと"
+    },
+    {
+      "label": "趣味",
+      "value": "・ホロ活\n・音楽に触れること（聴く・歌う）\n・TRPG\n・マーダーミステリー\n・脱出ゲーム"
+    },
+    {
+      "label": "好きなもの",
+      "value": "・チュロス\n・ガチャ"
+    },
+    {
+      "label": "特技",
+      "value": "・お芝居\n・ナレーション\n・きれいな画像をつくること"
+    }
+  ],
+  "social_links": [
+    {
+      "label": "YouTube",
+      "url": "https://www.youtube.com/@holoANroom?sub_confirmation=1"
+    },
+    {
+      "label": "X",
+      "url": "https://twitter.com/harusakinodoka"
+    }
+  ],
+  "official_url": "https://hololive.hololivepro.com/talents/harusaki-nodoka/"
+}
