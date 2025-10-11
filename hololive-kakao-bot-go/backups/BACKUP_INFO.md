@@ -24,9 +24,9 @@ git diff internal/domain/data/
 ```
 
 ## Rollback Strategy
-1. Database rollback: Run migrations/down scripts
-2. Application rollback: Revert commits
-3. Data rollback: Use this backup
+1. Data rollback: Restore this backup into `internal/domain/data/`
+2. Application rollback: Revert commits if needed
+3. Database rollback: Apply manual SQL changes (자동화된 스크립트 제거됨)
 
 ## Critical Notes
 - This backup was created BEFORE JSON → PostgreSQL migration

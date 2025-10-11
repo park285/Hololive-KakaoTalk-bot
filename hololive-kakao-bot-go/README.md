@@ -78,7 +78,6 @@ hololive-kakao-bot-go/
 │   ├── official_profiles/*.json  # 공식 프로필
 │   └── official_translated/*.json# 번역된 프로필
 ├── scripts/                      # 운영 스크립트
-├── migrations/                   # DB 마이그레이션
 └── bin/bot                       # 빌드된 바이너리
 ```
 

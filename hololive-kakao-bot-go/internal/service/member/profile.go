@@ -1,0 +1,294 @@
+package member
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
+	"github.com/kapu/hololive-kakao-bot-go/internal/prompt"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service/ai"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service/cache"
+	"github.com/kapu/hololive-kakao-bot-go/internal/util"
+	"go.uber.org/zap"
+)
+
+const (
+	translationLocale         = "ko"
+	cacheKeyProfileTranslated = "hololive:profile:translated:%s:%s"
+	maxPromptDataEntries      = 10
+)
+
+type ProfileService struct {
+	cache         *cache.CacheService
+	modelManager  *ai.ModelManager
+	logger        *zap.Logger
+	membersData   domain.MemberDataProvider
+	profiles      map[string]*domain.TalentProfile // slug -> profile
+	translations  map[string]*domain.Translated
+	englishToSlug map[string]string
+	channelToSlug map[string]string
+}
+
+func NewProfileService(cache *cache.CacheService, membersData domain.MemberDataProvider, modelManager *ai.ModelManager, logger *zap.Logger) (*ProfileService, error) {
+	if membersData == nil {
+		return nil, fmt.Errorf("members data is nil")
+	}
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+
+	profiles, err := domain.LoadProfiles()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load official profiles dataset: %w", err)
+	}
+
+	preTranslated, err := domain.LoadTranslated()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load translated profiles dataset: %w", err)
+	}
+
+	service := &ProfileService{
+		cache:         cache,
+		modelManager:  modelManager,
+		logger:        logger,
+		membersData:   membersData,
+		profiles:      profiles,
+		translations:  preTranslated,
+		englishToSlug: make(map[string]string, len(profiles)),
+		channelToSlug: make(map[string]string, len(membersData.GetAllMembers())),
+	}
+
+	for slug, profile := range profiles {
+		if profile == nil {
+			continue
+		}
+		key := util.NormalizeKey(profile.EnglishName)
+		if key != "" {
+			service.englishToSlug[key] = slug
+		}
+	}
+
+	for _, member := range membersData.GetAllMembers() {
+		if member == nil {
+			continue
+		}
+		if slug, ok := service.slugFor(member.Name); ok {
+			service.channelToSlug[strings.ToLower(member.ChannelID)] = slug
+			continue
+		}
+
+		key := util.NormalizeKey(member.Name)
+		if key != "" {
+			service.englishToSlug[key] = util.Slugify(member.Name)
+		}
+	}
+
+	logger.Info("ProfileService initialized",
+		zap.Int("profiles", len(service.profiles)),
+		zap.Int("translated_profiles", len(service.translations)),
+		zap.Int("index_english", len(service.englishToSlug)),
+		zap.Int("index_channel", len(service.channelToSlug)),
+	)
+
+	return service, nil
+}
+
+func (s *ProfileService) GetWithTranslation(ctx context.Context, englishName string) (*domain.TalentProfile, *domain.Translated, error) {
+	if strings.TrimSpace(englishName) == "" {
+		return nil, nil, fmt.Errorf("멤버 이름이 필요합니다.")
+	}
+
+	profile, err := s.GetByEnglish(englishName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	translated, err := s.getTranslated(ctx, profile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return profile, translated, nil
+}
+
+func (s *ProfileService) GetByEnglish(englishName string) (*domain.TalentProfile, error) {
+	if profile, ok := s.byEnglish(englishName); ok {
+		return profile, nil
+	}
+	return nil, fmt.Errorf("'%s' 멤버의 공식 프로필 정보를 찾을 수 없습니다.", englishName)
+}
+
+func (s *ProfileService) GetByChannel(channelID string) (*domain.TalentProfile, error) {
+	if channelID == "" {
+		return nil, fmt.Errorf("channel id is empty")
+	}
+	slug, ok := s.channelToSlug[strings.ToLower(channelID)]
+	if !ok {
+		return nil, fmt.Errorf("채널ID '%s'에 대한 공식 프로필이 없습니다.", channelID)
+	}
+	profile, ok := s.profiles[slug]
+	if !ok || profile == nil {
+		return nil, fmt.Errorf("'%s' 슬러그에 대한 프로필 데이터가 없습니다.", slug)
+	}
+	return profile, nil
+}
+
+func (s *ProfileService) byEnglish(englishName string) (*domain.TalentProfile, bool) {
+	slug, ok := s.slugFor(englishName)
+	if !ok {
+		return nil, false
+	}
+	profile, ok := s.profiles[slug]
+	if !ok || profile == nil {
+		return nil, false
+	}
+	return profile, true
+}
+
+func (s *ProfileService) slugFor(name string) (string, bool) {
+	key := util.NormalizeKey(name)
+	if key == "" {
+		return "", false
+	}
+	slug, ok := s.englishToSlug[key]
+	return slug, ok
+}
+
+func (s *ProfileService) getTranslated(ctx context.Context, raw *domain.TalentProfile) (*domain.Translated, error) {
+	if raw == nil {
+		return nil, fmt.Errorf("raw profile is nil")
+	}
+
+	cacheKey := fmt.Sprintf(cacheKeyProfileTranslated, translationLocale, raw.Slug)
+
+	if s.cache != nil {
+		var cached domain.Translated
+		if err := s.cache.Get(ctx, cacheKey, &cached); err == nil && cached.DisplayName != "" {
+			return &cached, nil
+		}
+	}
+
+	if translated := s.translations[raw.Slug]; translated != nil {
+		cloned := cloneTranslatedProfile(translated)
+		if s.cache != nil && cloned != nil {
+			if err := s.cache.Set(ctx, cacheKey, cloned, 0); err != nil {
+				s.logger.Warn("Failed to cache translated profile",
+					zap.String("slug", raw.Slug),
+					zap.Error(err),
+				)
+			}
+		}
+		return cloned, nil
+	}
+
+	if s.modelManager == nil {
+		return nil, fmt.Errorf("AI 번역 서비스가 설정되지 않았습니다.")
+	}
+
+	promptText, err := prompt.BuildTranslate(prompt.TranslateVars{
+		EnglishName:    raw.EnglishName,
+		JapaneseName:   raw.JapaneseName,
+		Catchphrase:    raw.Catchphrase,
+		Description:    raw.Description,
+		DataEntries:    convertToPromptEntries(raw.DataEntries),
+		MaxDataEntries: util.Min(len(raw.DataEntries), maxPromptDataEntries),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("번역 프롬프트 생성 실패: %w", err)
+	}
+
+	var translated domain.Translated
+	metadata, genErr := s.modelManager.GenerateJSON(ctx, promptText, ai.PresetBalanced, &translated, nil)
+	if genErr != nil {
+		return nil, fmt.Errorf("번역 생성 실패: %w", genErr)
+	}
+
+	s.logger.Info("Official profile translated",
+		zap.String("member", raw.EnglishName),
+		zap.String("provider", metadata.Provider),
+		zap.String("model", metadata.Model),
+		zap.Bool("fallback", metadata.UsedFallback),
+	)
+
+	if s.cache != nil {
+		if err := s.cache.Set(ctx, cacheKey, translated, 0); err != nil {
+			s.logger.Warn("Failed to cache translated profile",
+				zap.String("slug", raw.Slug),
+				zap.Error(err),
+			)
+		}
+	}
+
+	cloned := cloneTranslatedProfile(&translated)
+	if cloned != nil {
+		if s.translations == nil {
+			s.translations = make(map[string]*domain.Translated)
+		}
+		s.translations[raw.Slug] = cloned
+	}
+
+	return cloned, nil
+}
+
+func convertToPromptEntries(entries []domain.TalentProfileEntry) []prompt.TranslateEntry {
+	if len(entries) == 0 {
+		return []prompt.TranslateEntry{}
+	}
+
+	result := make([]prompt.TranslateEntry, 0, len(entries))
+	for _, entry := range entries {
+		label := strings.TrimSpace(entry.Label)
+		value := strings.TrimSpace(entry.Value)
+		if label == "" || value == "" {
+			continue
+		}
+		result = append(result, prompt.TranslateEntry{
+			Label: label,
+			Value: value,
+		})
+	}
+	return result
+}
+
+func (s *ProfileService) PreloadTranslations(ctx context.Context) {
+	if s == nil || s.cache == nil || len(s.translations) == 0 {
+		return
+	}
+
+	written := 0
+	for slug, profile := range s.translations {
+		if profile == nil {
+			continue
+		}
+		if err := s.cache.Set(ctx, fmt.Sprintf(cacheKeyProfileTranslated, translationLocale, slug), profile, 0); err != nil {
+			s.logger.Warn("Failed to preload translated profile",
+				zap.String("slug", slug),
+				zap.Error(err),
+			)
+			continue
+		}
+		written++
+	}
+
+	if written > 0 {
+		s.logger.Info("Preloaded translated profiles",
+			zap.Int("count", written))
+	}
+}
+
+func cloneTranslatedProfile(src *domain.Translated) *domain.Translated {
+	if src == nil {
+		return nil
+	}
+
+	clone := *src
+	if len(src.Highlights) > 0 {
+		clone.Highlights = append([]string(nil), src.Highlights...)
+	}
+	if len(src.Data) > 0 {
+		clone.Data = make([]domain.TranslatedProfileDataRow, len(src.Data))
+		copy(clone.Data, src.Data)
+	}
+	return &clone
+}

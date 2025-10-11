@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
-	"github.com/kapu/hololive-kakao-bot-go/internal/service"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service/database"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service/member"
 	"github.com/kapu/hololive-kakao-bot-go/internal/util"
 )
 
@@ -18,13 +21,15 @@ func main() {
 	log.Println()
 
 	// Initialize PostgreSQL
-	postgres, err := service.NewPostgresService(service.PostgresConfig{
-		Host:     "localhost",
-		Port:     5433,
-		User:     "holo_user",
-		Password: "holo_password",
-		Database: "holo_oshi_db",
-	}, logger)
+	postgresCfg := database.PostgresConfig{
+		Host:     envOrDefault("POSTGRES_HOST", "localhost"),
+		Port:     envOrDefaultInt("POSTGRES_PORT", 5432),
+		User:     envOrDefault("POSTGRES_USER", "holo_user"),
+		Password: envOrDefault("POSTGRES_PASSWORD", "holo_password"),
+		Database: envOrDefault("POSTGRES_DB", "holo_oshi_db"),
+	}
+
+	postgres, err := database.NewPostgresService(postgresCfg, logger)
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to PostgreSQL: %v", err)
 	}
@@ -32,7 +37,7 @@ func main() {
 	log.Println("✓ PostgreSQL connected")
 
 	// Initialize Repository
-	repo := service.NewMemberRepository(postgres, logger)
+	repo := member.NewMemberRepository(postgres, logger)
 	log.Println("✓ MemberRepository created")
 
 	// Test 1: Get all members
@@ -45,28 +50,28 @@ func main() {
 
 	// Test 2: Find by channel ID
 	testChannelID := "UChAnqc_AY5_I3Px5dig3X1Q" // Korone
-	member, err := repo.FindByChannelID(ctx, testChannelID)
+	foundMember, err := repo.FindByChannelID(ctx, testChannelID)
 	if err != nil {
 		log.Fatalf("❌ Failed to find by channel ID: %v", err)
 	}
-	if member == nil {
+	if foundMember == nil {
 		log.Fatal("❌ Korone not found!")
 	}
 	log.Printf("✓ Find by channel ID: %s (aliases: ko=%d, ja=%d)",
-		member.Name, len(member.Aliases.Ko), len(member.Aliases.Ja))
+		foundMember.Name, len(foundMember.Aliases.Ko), len(foundMember.Aliases.Ja))
 
 	// Test 3: Find by alias
-	member, err = repo.FindByAlias(ctx, "코로네")
+	foundMember, err = repo.FindByAlias(ctx, "코로네")
 	if err != nil {
 		log.Fatalf("❌ Failed to find by alias: %v", err)
 	}
-	if member == nil {
+	if foundMember == nil {
 		log.Fatal("❌ Alias '코로네' not found!")
 	}
-	log.Printf("✓ Find by alias '코로네': %s", member.Name)
+	log.Printf("✓ Find by alias '코로네': %s", foundMember.Name)
 
 	// Test 4: Initialize Cache (without Redis)
-	cache, err := service.NewMemberCache(repo, nil, logger, service.MemberCacheConfig{
+	memberCache, err := member.NewMemberCache(repo, nil, logger, member.MemberCacheConfig{
 		WarmUp:   true,
 		RedisTTL: 30 * time.Minute,
 	})
@@ -76,23 +81,23 @@ func main() {
 	log.Println("✓ MemberCache created with warm-up")
 
 	// Test 5: Cache queries
-	member, err = cache.GetByChannelID(ctx, testChannelID)
+	foundMember, err = memberCache.GetByChannelID(ctx, testChannelID)
 	if err != nil {
 		log.Fatalf("❌ Cache GetByChannelID failed: %v", err)
 	}
-	if member == nil {
+	if foundMember == nil {
 		log.Fatal("❌ Korone not in cache!")
 	}
-	log.Printf("✓ Cache hit: %s", member.Name)
+	log.Printf("✓ Cache hit: %s", foundMember.Name)
 
 	// Test 6: Adapter
-	adapter := service.NewMemberServiceAdapter(cache)
+	adapter := member.NewMemberServiceAdapter(memberCache)
 	adapterCtx := adapter.WithContext(ctx)
-	member = adapterCtx.FindMemberByChannelID(testChannelID)
-	if member == nil {
+	foundMember = adapterCtx.FindMemberByChannelID(testChannelID)
+	if foundMember == nil {
 		log.Fatal("❌ Adapter failed!")
 	}
-	log.Printf("✓ Adapter works: %s", member.Name)
+	log.Printf("✓ Adapter works: %s", foundMember.Name)
 
 	channelIDs := adapterCtx.GetChannelIDs()
 	log.Printf("✓ Adapter GetChannelIDs: %d channels", len(channelIDs))
@@ -110,4 +115,24 @@ func main() {
 	fmt.Printf("- Cache: ✓ Working\n")
 	fmt.Printf("- Adapter: ✓ Working\n")
 	fmt.Printf("- Alias search: ✓ Working\n")
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func envOrDefaultInt(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		log.Printf("⚠ Invalid value for %s (%s), using default %d\n", key, value, fallback)
+		return fallback
+	}
+	return parsed
 }

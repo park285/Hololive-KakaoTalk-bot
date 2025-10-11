@@ -17,7 +17,7 @@ import (
 	"github.com/kapu/hololive-kakao-bot-go/internal/config"
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
 	"github.com/kapu/hololive-kakao-bot-go/internal/prompt"
-	"github.com/kapu/hololive-kakao-bot-go/internal/service"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service/ai"
 )
 
 type multiString []string
@@ -111,7 +111,7 @@ func main() {
 		zap.Int("max_output_tokens", maxOutputTokens),
 	)
 
-	mm, err := service.NewModelManager(ctx, service.ModelManagerConfig{
+	mm, err := ai.NewModelManager(ctx, ai.ModelManagerConfig{
 		GeminiAPIKey:       apiKey,
 		DefaultGeminiModel: generationModel,
 		OpenAIAPIKey:       openAIKey,
@@ -267,12 +267,12 @@ func buildPrompt(profile *domain.TalentProfile) (string, error) {
 	return promptText, nil
 }
 
-func translateWithRetry(ctx context.Context, mm *service.ModelManager, promptText string, profile *domain.TalentProfile, logger *zap.Logger) (*domain.Translated, error) {
+func translateWithRetry(ctx context.Context, mm *ai.ModelManager, promptText string, profile *domain.TalentProfile, logger *zap.Logger) (*domain.Translated, error) {
 	var lastErr error
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		var translated domain.Translated
-		_, err := mm.GenerateJSON(ctx, promptText, service.PresetBalanced, &translated, nil)
+		_, err := mm.GenerateJSON(ctx, promptText, ai.PresetBalanced, &translated, nil)
 		if err == nil {
 			normalizeTranslation(&translated, profile)
 			return &translated, nil
@@ -412,7 +412,7 @@ func writeOutput(data map[string]*domain.Translated) error {
 	return nil
 }
 
-func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlags multiString, slugCSV string, logger *zap.Logger) error {
+func runStyleImprovement(ctx context.Context, mm *ai.ModelManager, slugFlags multiString, slugCSV string, logger *zap.Logger) error {
 	existingTranslations, err := domain.LoadTranslated()
 	if err != nil {
 		return fmt.Errorf("failed to load existing translations: %w", err)
@@ -475,7 +475,7 @@ func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlag
 		}
 
 		var improvedProfile domain.Translated
-		_, genErr := mm.GenerateJSON(ctx, promptText, service.PresetBalanced, &improvedProfile, nil)
+		_, genErr := mm.GenerateJSON(ctx, promptText, ai.PresetBalanced, &improvedProfile, nil)
 		if genErr != nil {
 			logger.Error("style improvement failed", zap.String("slug", slug), zap.Error(genErr))
 			continue
@@ -506,7 +506,7 @@ func runStyleImprovement(ctx context.Context, mm *service.ModelManager, slugFlag
 	return nil
 }
 
-func runRefineFromOriginal(ctx context.Context, mm *service.ModelManager, slugFlags multiString, slugCSV string, model string, maxOutputTokens int, logger *zap.Logger) error {
+func runRefineFromOriginal(ctx context.Context, mm *ai.ModelManager, slugFlags multiString, slugCSV string, model string, maxOutputTokens int, logger *zap.Logger) error {
 	rawProfiles, err := domain.LoadProfiles()
 	if err != nil {
 		return fmt.Errorf("failed to load original profiles: %w", err)
@@ -579,17 +579,17 @@ func runRefineFromOriginal(ctx context.Context, mm *service.ModelManager, slugFl
 		}
 
 		// Use configured Gemini model with optional max token override
-		opts := &service.GenerateOptions{
+		opts := &ai.GenerateOptions{
 			Model: model,
 		}
 		if maxOutputTokens > 0 {
-			opts.Overrides = &service.ModelConfig{
+			opts.Overrides = &ai.ModelConfig{
 				MaxOutputTokens: maxOutputTokens,
 			}
 		}
 
 		var refinedProfile domain.Translated
-		_, genErr := mm.GenerateJSON(ctx, promptText, service.PresetBalanced, &refinedProfile, opts)
+		_, genErr := mm.GenerateJSON(ctx, promptText, ai.PresetBalanced, &refinedProfile, opts)
 		if genErr != nil {
 			logger.Error("refinement failed", zap.String("slug", slug), zap.Error(genErr))
 			continue

@@ -8,29 +8,44 @@ import (
 	"testing"
 
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
-	"github.com/kapu/hololive-kakao-bot-go/internal/service"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service/ai"
 	"go.uber.org/zap"
 )
 
 type fakeParser struct {
 	result                *domain.ParseResults
-	metadata              *service.GenerateMetadata
+	metadata              *ai.GenerateMetadata
 	err                   error
 	calls                 []string
 	clarificationMessage  string
-	clarificationMetadata *service.GenerateMetadata
+	clarificationMetadata *ai.GenerateMetadata
 	clarificationErr      error
 	smartClarification    *domain.Clarification
-	smartMetadata         *service.GenerateMetadata
+	smartMetadata         *ai.GenerateMetadata
 	smartErr              error
 }
 
-func (f *fakeParser) ParseNaturalLanguage(_ context.Context, query string, _ domain.MemberDataProvider) (*domain.ParseResults, *service.GenerateMetadata, error) {
+type fakeDispatcher struct {
+	events []CommandEvent
+	err    error
+}
+
+func (f *fakeDispatcher) Publish(_ context.Context, _ *domain.CommandContext, events ...CommandEvent) (int, error) {
+	for _, event := range events {
+		if event.Params != nil {
+			event.Params["__mutated__"] = true
+		}
+	}
+	f.events = append(f.events, events...)
+	return len(events), f.err
+}
+
+func (f *fakeParser) ParseNaturalLanguage(_ context.Context, query string, _ domain.MemberDataProvider) (*domain.ParseResults, *ai.GenerateMetadata, error) {
 	f.calls = append(f.calls, query)
 	return f.result, f.metadata, f.err
 }
 
-func (f *fakeParser) GenerateClarificationMessage(_ context.Context, _ string) (string, *service.GenerateMetadata, error) {
+func (f *fakeParser) GenerateClarificationMessage(_ context.Context, _ string) (string, *ai.GenerateMetadata, error) {
 	if f.clarificationErr != nil {
 		return "", nil, f.clarificationErr
 	}
@@ -40,8 +55,7 @@ func (f *fakeParser) GenerateClarificationMessage(_ context.Context, _ string) (
 	return "", nil, nil
 }
 
-func (f *fakeParser) ClassifyMemberInfoIntent(_ context.Context, _ string) (*domain.MemberIntent, *service.GenerateMetadata, error) {
-	// Return non-member-info intent by default
+func (f *fakeParser) ClassifyMemberInfoIntent(_ context.Context, _ string) (*domain.MemberIntent, *ai.GenerateMetadata, error) {
 	return &domain.MemberIntent{
 		Intent:     domain.MemberIntentOther,
 		Confidence: 0.9,
@@ -49,7 +63,7 @@ func (f *fakeParser) ClassifyMemberInfoIntent(_ context.Context, _ string) (*dom
 	}, nil, nil
 }
 
-func (f *fakeParser) GenerateSmartClarification(_ context.Context, _ string, _ domain.MemberDataProvider) (*domain.Clarification, *service.GenerateMetadata, error) {
+func (f *fakeParser) GenerateSmartClarification(_ context.Context, _ string, _ domain.MemberDataProvider) (*domain.Clarification, *ai.GenerateMetadata, error) {
 	if f.smartErr != nil {
 		return nil, nil, f.smartErr
 	}
@@ -77,20 +91,20 @@ func TestAskCommandDelegatesParsedCommands(t *testing.T) {
 					},
 				},
 				{
-					Command:    domain.CommandAsk, // Should be ignored to avoid recursion
+					Command:    domain.CommandAsk,
 					Confidence: 0.9,
 					Params:     map[string]any{},
 				},
 			},
 		},
-		metadata: &service.GenerateMetadata{
+		metadata: &ai.GenerateMetadata{
 			Provider:     "Gemini",
 			Model:        "test-model",
 			UsedFallback: false,
 		},
 	}
 
-	var executed []domain.CommandType
+	dispatcher := &fakeDispatcher{}
 	deps := &Dependencies{
 		Gemini:      parser,
 		MembersData: &domain.MembersData{},
@@ -102,16 +116,8 @@ func TestAskCommandDelegatesParsedCommands(t *testing.T) {
 			t.Fatalf("unexpected SendError call: %s", message)
 			return nil
 		},
-		ExecuteCommand: func(ctx context.Context, cmdCtx *domain.CommandContext, cmdType domain.CommandType, params map[string]any) error {
-			executed = append(executed, cmdType)
-			if _, ok := params["member"]; !ok {
-				t.Fatalf("expected member parameter to be forwarded, got %v", params)
-			}
-			// Mutate params to ensure defensive copy inside AskCommand
-			params["member"] = "Mutsuki"
-			return nil
-		},
-		Logger: zap.NewNop(),
+		Dispatcher: dispatcher,
+		Logger:     zap.NewNop(),
 	}
 
 	cmd := NewAskCommand(deps)
@@ -125,13 +131,16 @@ func TestAskCommandDelegatesParsedCommands(t *testing.T) {
 	if len(parser.calls) != 1 {
 		t.Fatalf("expected parser to be called once, got %d", len(parser.calls))
 	}
-	if len(executed) != 1 || executed[0] != domain.CommandSchedule {
-		t.Fatalf("expected CommandSchedule to be executed once, got %v", executed)
+	if len(dispatcher.events) != 1 || dispatcher.events[0].Type != domain.CommandSchedule {
+		t.Fatalf("expected CommandSchedule to be dispatched once, got %v", dispatcher.events)
 	}
 
-	// Ensure original parse result was not mutated by ExecuteCommand
 	if parser.result.Multiple[0].Params["member"] != "Usada Pekora" {
 		t.Fatalf("expected original params to remain unchanged, got %v", parser.result.Multiple[0].Params["member"])
+	}
+
+	if _, ok := dispatcher.events[0].Params["__mutated__"]; !ok {
+		t.Fatalf("expected dispatcher to record mutation sentinel")
 	}
 }
 
@@ -147,6 +156,7 @@ func TestAskCommandHandlesUnknownResults(t *testing.T) {
 	}
 
 	var message string
+	dispatcher := &fakeDispatcher{}
 	deps := &Dependencies{
 		Gemini:      parser,
 		MembersData: &domain.MembersData{},
@@ -158,11 +168,8 @@ func TestAskCommandHandlesUnknownResults(t *testing.T) {
 			t.Fatalf("unexpected SendError call: %s", msg)
 			return nil
 		},
-		ExecuteCommand: func(ctx context.Context, cmdCtx *domain.CommandContext, cmdType domain.CommandType, params map[string]any) error {
-			t.Fatalf("ExecuteCommand should not be called when only unknown commands are returned")
-			return nil
-		},
-		Logger: zap.NewNop(),
+		Dispatcher: dispatcher,
+		Logger:     zap.NewNop(),
 	}
 
 	cmd := NewAskCommand(deps)
@@ -184,6 +191,7 @@ func TestAskCommandHandlesParserError(t *testing.T) {
 	}
 
 	var errorMsg string
+	dispatcher := &fakeDispatcher{}
 	deps := &Dependencies{
 		Gemini:      parser,
 		MembersData: &domain.MembersData{},
@@ -195,11 +203,8 @@ func TestAskCommandHandlesParserError(t *testing.T) {
 			errorMsg = msg
 			return nil
 		},
-		ExecuteCommand: func(ctx context.Context, cmdCtx *domain.CommandContext, cmdType domain.CommandType, params map[string]any) error {
-			t.Fatalf("ExecuteCommand should not be called on parser error")
-			return nil
-		},
-		Logger: zap.NewNop(),
+		Dispatcher: dispatcher,
+		Logger:     zap.NewNop(),
 	}
 
 	cmd := NewAskCommand(deps)
@@ -218,6 +223,7 @@ func TestAskCommandHandlesParserError(t *testing.T) {
 func TestAskCommandValidatesEmptyQuestion(t *testing.T) {
 	parser := &fakeParser{}
 	var errorMsg string
+	dispatcher := &fakeDispatcher{}
 	deps := &Dependencies{
 		Gemini:      parser,
 		MembersData: &domain.MembersData{},
@@ -229,11 +235,8 @@ func TestAskCommandValidatesEmptyQuestion(t *testing.T) {
 			errorMsg = msg
 			return nil
 		},
-		ExecuteCommand: func(ctx context.Context, cmdCtx *domain.CommandContext, cmdType domain.CommandType, params map[string]any) error {
-			t.Fatalf("ExecuteCommand should not be called for empty question")
-			return nil
-		},
-		Logger: zap.NewNop(),
+		Dispatcher: dispatcher,
+		Logger:     zap.NewNop(),
 	}
 
 	cmd := NewAskCommand(deps)
@@ -249,6 +252,10 @@ func TestAskCommandValidatesEmptyQuestion(t *testing.T) {
 	}
 	if !strings.Contains(errorMsg, "질문을 이해하지 못했습니다") {
 		t.Fatalf("unexpected validation message: %s", errorMsg)
+	}
+
+	if len(dispatcher.events) != 0 {
+		t.Fatalf("dispatcher should not be invoked for empty question, got %v", dispatcher.events)
 	}
 }
 
@@ -266,6 +273,7 @@ func TestAskCommandSkipsLowConfidenceResults(t *testing.T) {
 	}
 
 	var message string
+	dispatcher := &fakeDispatcher{}
 	deps := &Dependencies{
 		Gemini:      parser,
 		MembersData: &domain.MembersData{},
@@ -277,11 +285,8 @@ func TestAskCommandSkipsLowConfidenceResults(t *testing.T) {
 			t.Fatalf("unexpected SendError call: %s", msg)
 			return nil
 		},
-		ExecuteCommand: func(ctx context.Context, cmdCtx *domain.CommandContext, cmdType domain.CommandType, params map[string]any) error {
-			t.Fatalf("ExecuteCommand should not be called for low-confidence results")
-			return nil
-		},
-		Logger: zap.NewNop(),
+		Dispatcher: dispatcher,
+		Logger:     zap.NewNop(),
 	}
 
 	cmd := NewAskCommand(deps)
@@ -295,6 +300,10 @@ func TestAskCommandSkipsLowConfidenceResults(t *testing.T) {
 	if !strings.Contains(message, "요청을 이해하지 못했습니다") {
 		t.Fatalf("unexpected fallback message: %s", message)
 	}
+
+	if len(dispatcher.events) != 0 {
+		t.Fatalf("dispatcher should not be invoked for low-confidence results, got %v", dispatcher.events)
+	}
 }
 
 func TestHandleMemberFallbackFailurePrefersLLMMessage(t *testing.T) {
@@ -303,7 +312,7 @@ func TestHandleMemberFallbackFailurePrefersLLMMessage(t *testing.T) {
 			IsHololiveRelated: true,
 			Message:           `누구를 말씀하신 건지 잘 모르겠어요. "하짱"를 말씀하신 건가요? 홀로라이브 소속이 맞는지 확인하신 뒤 다시 질문해 주세요.`,
 		},
-		smartMetadata: &service.GenerateMetadata{
+		smartMetadata: &ai.GenerateMetadata{
 			Provider:     "Gemini",
 			Model:        "test",
 			UsedFallback: false,

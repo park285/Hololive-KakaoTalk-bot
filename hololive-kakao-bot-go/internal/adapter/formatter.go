@@ -517,10 +517,18 @@ func (f *ResponseFormatter) FormatTalentProfile(raw *domain.TalentProfile, trans
 		}
 		for i := 0; i < maxRows; i++ {
 			row := dataEntries[i]
-			if strings.TrimSpace(row.Label) == "" || strings.TrimSpace(row.Value) == "" {
+			label := strings.TrimSpace(row.Label)
+			value := strings.TrimSpace(row.Value)
+			if label == "" || value == "" {
 				continue
 			}
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", row.Label, row.Value))
+
+			if strings.Contains(value, "\n") {
+				indented := "  " + strings.ReplaceAll(value, "\n", "\n  ")
+				sb.WriteString(fmt.Sprintf("- %s:\n%s\n", label, indented))
+			} else {
+				sb.WriteString(fmt.Sprintf("- %s: %s\n", label, value))
+			}
 		}
 	}
 

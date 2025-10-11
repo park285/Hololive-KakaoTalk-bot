@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kapu/hololive-kakao-bot-go/internal/bot"
+	"github.com/kapu/hololive-kakao-bot-go/internal/app"
 	"github.com/kapu/hololive-kakao-bot-go/internal/config"
 	"github.com/kapu/hololive-kakao-bot-go/internal/util"
 	"go.uber.org/zap"
@@ -35,16 +35,23 @@ func main() {
 		zap.String("log_level", cfg.Logging.Level),
 	)
 
-	// Create context with cancellation
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	buildCtx, buildCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	container, err := app.Build(buildCtx, cfg, logger)
+	buildCancel()
+	if err != nil {
+		logger.Error("Failed to assemble application services", zap.Error(err))
+		os.Exit(1)
+	}
 
-	// Initialize bot
-	kakaoBot, err := bot.NewBot(ctx, cfg, logger)
+	kakaoBot, err := container.NewBot()
 	if err != nil {
 		logger.Error("Failed to initialize bot", zap.Error(err))
 		os.Exit(1)
 	}
+
+	// Create context with cancellation for runtime lifecycle
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Setup signal handling
 	sigCh := make(chan os.Signal, 1)

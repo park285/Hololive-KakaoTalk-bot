@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
-	"github.com/kapu/hololive-kakao-bot-go/internal/service"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service/ai"
 	"go.uber.org/zap"
 )
 
@@ -20,6 +20,7 @@ type askWorkflow struct {
 	cmdCtx   *domain.CommandContext
 	provider domain.MemberDataProvider
 	logger   *zap.Logger
+	dispatch Dispatcher
 }
 
 const (
@@ -62,7 +63,7 @@ func (c *AskCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext,
 		return workflow.handleNoCommand(question)
 	}
 
-	executed, err := workflow.delegateCommands(question, validResults)
+	executed, err := workflow.dispatchCommands(question, validResults)
 	if err != nil {
 		return err
 	}
@@ -92,7 +93,7 @@ func (c *AskCommand) prepareWorkflow(ctx context.Context, cmdCtx *domain.Command
 		return nil, fmt.Errorf("message callbacks not configured")
 	}
 
-	if c.deps.Gemini == nil || c.deps.MembersData == nil || c.deps.ExecuteCommand == nil {
+	if c.deps.Gemini == nil || c.deps.MembersData == nil || c.deps.Dispatcher == nil {
 		return nil, c.deps.SendError(cmdCtx.Room, "AI 서비스가 준비되지 않았습니다. 잠시 후 다시 시도해주세요.")
 	}
 
@@ -109,6 +110,7 @@ func (c *AskCommand) prepareWorkflow(ctx context.Context, cmdCtx *domain.Command
 		cmdCtx:   cmdCtx,
 		provider: provider,
 		logger:   logger,
+		dispatch: c.deps.Dispatcher,
 	}, nil
 }
 
@@ -149,30 +151,22 @@ func (w *askWorkflow) filterValidResults(question string, commands []*domain.Par
 	return validResults
 }
 
-func (w *askWorkflow) delegateCommands(question string, results []*domain.ParseResult) (int, error) {
-	executed := 0
-
+func (w *askWorkflow) dispatchCommands(question string, results []*domain.ParseResult) (int, error) {
+	events := make([]CommandEvent, 0, len(results))
 	for _, result := range results {
-		w.logger.Debug("Delegating parsed command",
+		w.logger.Debug("Dispatching parsed command",
 			zap.String("question", question),
 			zap.String("command", result.Command.String()),
 			zap.Float64("confidence", result.Confidence),
 			zap.Any("params", result.Params),
 		)
 
-		forwardParams := make(map[string]any, len(result.Params))
-		for k, v := range result.Params {
-			forwardParams[k] = v
-		}
-
-		if err := w.deps.ExecuteCommand(w.ctx, w.cmdCtx, result.Command, forwardParams); err != nil {
-			return executed, err
-		}
-
-		executed++
+		events = append(events, CommandEvent{
+			Type:   result.Command,
+			Params: cloneParams(result.Params),
+		})
 	}
-
-	return executed, nil
+	return w.dispatch.Publish(w.ctx, w.cmdCtx, events...)
 }
 
 func (w *askWorkflow) handleNoCommand(question string) error {
@@ -182,7 +176,7 @@ func (w *askWorkflow) handleNoCommand(question string) error {
 	return w.deps.SendMessage(w.cmdCtx.Room, askUnsupportedMessage)
 }
 
-func (w *askWorkflow) logMetadata(metadata *service.GenerateMetadata, executed int) {
+func (w *askWorkflow) logMetadata(metadata *ai.GenerateMetadata, executed int) {
 	if metadata == nil || w.logger == nil {
 		return
 	}
@@ -196,7 +190,7 @@ func (w *askWorkflow) logMetadata(metadata *service.GenerateMetadata, executed i
 }
 
 func (w *askWorkflow) tryMemberInfo(question string) bool {
-	if w.deps == nil || w.deps.Matcher == nil || w.deps.ExecuteCommand == nil {
+	if w.deps == nil || w.deps.Matcher == nil || w.dispatch == nil {
 		return false
 	}
 
@@ -227,7 +221,7 @@ func (w *askWorkflow) tryMemberInfo(question string) bool {
 			params["channel_id"] = channelID
 		}
 
-		if err := w.deps.ExecuteCommand(w.ctx, w.cmdCtx, domain.CommandMemberInfo, params); err != nil {
+		if err := w.invokeCommand(domain.CommandMemberInfo, params); err != nil {
 			if w.logger != nil {
 				w.logger.Warn("Member info fallback failed",
 					zap.String("question", question),
@@ -252,6 +246,11 @@ func (w *askWorkflow) tryMemberInfo(question string) bool {
 		return true
 	}
 	return false
+}
+
+func (w *askWorkflow) invokeCommand(cmdType domain.CommandType, params map[string]any) error {
+	_, err := w.dispatch.Publish(w.ctx, w.cmdCtx, CommandEvent{Type: cmdType, Params: cloneParams(params)})
+	return err
 }
 
 func (w *askWorkflow) findMember(question string) *domain.Member {
