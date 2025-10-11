@@ -11,7 +11,7 @@
 {{range $index, $alarm := .Alarms}}
 {{add $index 1}}. {{$alarm.MemberName}}
 {{- if $alarm.NextStream}}
-{{indent 3 $alarm.NextStream}}
+   {{$alarm.NextStream}}
 {{- end}}
 
 {{- if lt (add $index 1) $.Count}}
