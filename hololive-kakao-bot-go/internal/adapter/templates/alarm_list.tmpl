@@ -8,12 +8,15 @@
 {{- else -}}
 🔔 설정된 알람 ({{.Count}}개)
 
-{{range $index, $alarm := .Alarms}}
+{{- range $index, $alarm := .Alarms}}
 {{add $index 1}}. {{$alarm.MemberName}}
 {{- if $alarm.NextStream}}
 {{$alarm.NextStream}}
 {{- end}}
+{{- if lt (add $index 1) $.Count}}
 
 {{- end}}
+{{- end}}
+
 💡 {{.Prefix}}알람 제거 [멤버명] 으로 알람 해제
 {{- end -}}

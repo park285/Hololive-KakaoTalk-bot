@@ -414,10 +414,12 @@ func (f *ResponseFormatter) fallbackAlarmList(data alarmListTemplateData) string
 		if strings.TrimSpace(alarm.NextStream) != "" {
 			sb.WriteString(fmt.Sprintf("%s\n", alarm.NextStream))
 		}
-		sb.WriteString("\n")
+		if idx < data.Count-1 {
+			sb.WriteString("\n")
+		}
 	}
 
-	sb.WriteString(fmt.Sprintf("💡 %s알람 제거 [멤버명] 으로 알람 해제", data.Prefix))
+	sb.WriteString(fmt.Sprintf("\n💡 %s알람 제거 [멤버명] 으로 알람 해제", data.Prefix))
 	return strings.TrimSuffix(sb.String(), "\n")
 }
 

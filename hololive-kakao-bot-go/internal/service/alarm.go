@@ -467,11 +467,11 @@ func (as *AlarmService) GetNextStreamInfo(ctx context.Context, channelID string)
 	status := data["status"]
 
 	if status == "live" {
-    return "\n   🔴 현재 방송 중!", nil
+		return "   🔴 현재 방송 중!", nil
 	}
 
 	if status == "no_upcoming" || status == "time_unknown" {
-    return "\n   예정된 방송 없음", nil
+		return "   예정된 방송 없음", nil
 	}
 
 	if status != "upcoming" {
@@ -530,7 +530,7 @@ func (as *AlarmService) GetNextStreamInfo(ctx context.Context, channelID string)
 
 	shortTitle := util.TruncateString(title, constants.StringLimits.NextStreamTitle)
 
-    return fmt.Sprintf("\n   다음 방송: %s (%s)\n   [%s](https://youtube.com/watch?v=%s)", kstTime, timeDetail, shortTitle, videoID), nil
+	return fmt.Sprintf("   다음 방송: %s (%s)\n   [%s](https://youtube.com/watch?v=%s)", kstTime, timeDetail, shortTitle, videoID), nil
 }
 
 func (as *AlarmService) updateNextStreamCacheFromStreams(ctx context.Context, channelID string, streams []*domain.Stream) {
