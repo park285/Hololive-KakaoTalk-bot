@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 )
@@ -99,4 +100,6 @@ func (md *MembersData) GetAllMembers() []*Member {
 	return md.Members
 }
 
-
+func (md *MembersData) WithContext(ctx context.Context) MemberDataProvider {
+	return md
+}

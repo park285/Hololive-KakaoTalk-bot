@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
 )
@@ -23,6 +24,25 @@ func (c *HelpCommand) Description() string {
 }
 
 func (c *HelpCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
+	if err := c.ensureDeps(); err != nil {
+		return err
+	}
 	message := c.deps.Formatter.FormatHelp()
 	return c.deps.SendMessage(cmdCtx.Room, message)
+}
+
+func (c *HelpCommand) ensureDeps() error {
+	if c == nil || c.deps == nil {
+		return fmt.Errorf("help command dependencies not configured")
+	}
+
+	if c.deps.SendMessage == nil {
+		return fmt.Errorf("message callback not configured")
+	}
+
+	if c.deps.Formatter == nil {
+		return fmt.Errorf("formatter not configured")
+	}
+
+	return nil
 }

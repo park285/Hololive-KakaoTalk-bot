@@ -20,9 +20,12 @@ type fakeParser struct {
 	clarificationMessage  string
 	clarificationMetadata *service.GenerateMetadata
 	clarificationErr      error
+	smartClarification    *domain.Clarification
+	smartMetadata         *service.GenerateMetadata
+	smartErr              error
 }
 
-func (f *fakeParser) ParseNaturalLanguage(_ context.Context, query string, _ *domain.MembersData) (*domain.ParseResults, *service.GenerateMetadata, error) {
+func (f *fakeParser) ParseNaturalLanguage(_ context.Context, query string, _ domain.MemberDataProvider) (*domain.ParseResults, *service.GenerateMetadata, error) {
 	f.calls = append(f.calls, query)
 	return f.result, f.metadata, f.err
 }
@@ -46,8 +49,15 @@ func (f *fakeParser) ClassifyMemberInfoIntent(_ context.Context, _ string) (*dom
 	}, nil, nil
 }
 
-func (f *fakeParser) GenerateSmartClarification(_ context.Context, _ string, _ *domain.MembersData) (*domain.Clarification, *service.GenerateMetadata, error) {
-	// Return non-hololive-related by default
+func (f *fakeParser) GenerateSmartClarification(_ context.Context, _ string, _ domain.MemberDataProvider) (*domain.Clarification, *service.GenerateMetadata, error) {
+	if f.smartErr != nil {
+		return nil, nil, f.smartErr
+	}
+
+	if f.smartClarification != nil {
+		return f.smartClarification, f.smartMetadata, nil
+	}
+
 	return &domain.Clarification{
 		IsHololiveRelated: false,
 		Message:           "",
@@ -289,8 +299,11 @@ func TestAskCommandSkipsLowConfidenceResults(t *testing.T) {
 
 func TestHandleMemberFallbackFailurePrefersLLMMessage(t *testing.T) {
 	parser := &fakeParser{
-		clarificationMessage: `누구를 말씀하신 건지 잘 모르겠어요. "하짱"를 말씀하신 건가요? 홀로라이브 소속이 맞는지 확인하신 뒤 다시 질문해 주세요.`,
-		clarificationMetadata: &service.GenerateMetadata{
+		smartClarification: &domain.Clarification{
+			IsHololiveRelated: true,
+			Message:           `누구를 말씀하신 건지 잘 모르겠어요. "하짱"를 말씀하신 건가요? 홀로라이브 소속이 맞는지 확인하신 뒤 다시 질문해 주세요.`,
+		},
+		smartMetadata: &service.GenerateMetadata{
 			Provider:     "Gemini",
 			Model:        "test",
 			UsedFallback: false,
@@ -308,8 +321,15 @@ func TestHandleMemberFallbackFailurePrefersLLMMessage(t *testing.T) {
 		Logger: zap.NewNop(),
 	}
 
-	cmd := NewAskCommand(deps)
-	ok := cmd.handleFallbackFail(context.Background(), domain.NewCommandContext("room", "room", "user", "!ask", false), "하짱 알려줘")
+	wf := &askWorkflow{
+		ctx:      context.Background(),
+		deps:     deps,
+		cmdCtx:   domain.NewCommandContext("room", "room", "user", "!ask", false),
+		provider: deps.MembersData.WithContext(context.Background()),
+		logger:   deps.Logger,
+	}
+
+	ok := wf.handleFallbackFail("하짱 알려줘")
 	if !ok {
 		t.Fatalf("expected clarification handler to succeed")
 	}
@@ -320,7 +340,7 @@ func TestHandleMemberFallbackFailurePrefersLLMMessage(t *testing.T) {
 
 func TestHandleMemberFallbackFailureFallsBackToTemplate(t *testing.T) {
 	parser := &fakeParser{
-		clarificationErr: errors.New("llm failure"),
+		smartErr: errors.New("llm failure"),
 	}
 
 	var sent string
@@ -334,8 +354,15 @@ func TestHandleMemberFallbackFailureFallsBackToTemplate(t *testing.T) {
 		Logger: zap.NewNop(),
 	}
 
-	cmd := NewAskCommand(deps)
-	ok := cmd.handleFallbackFail(context.Background(), domain.NewCommandContext("room", "room", "user", "!ask", false), `하 "짱" 알려줘`)
+	wf := &askWorkflow{
+		ctx:      context.Background(),
+		deps:     deps,
+		cmdCtx:   domain.NewCommandContext("room", "room", "user", "!ask", false),
+		provider: deps.MembersData.WithContext(context.Background()),
+		logger:   deps.Logger,
+	}
+
+	ok := wf.handleFallbackFail(`하 "짱" 알려줘`)
 	if !ok {
 		t.Fatalf("expected clarification handler to succeed with template fallback")
 	}

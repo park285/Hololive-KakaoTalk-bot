@@ -11,6 +11,8 @@ bin/
 *.so
 *.dylib
 bot
+!cmd/bot/
+!cmd/bot/**
 
 # Go test binaries
 *.test

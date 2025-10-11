@@ -87,16 +87,17 @@ func main() {
 
 	// Test 6: Adapter
 	adapter := service.NewMemberServiceAdapter(cache)
-	member = adapter.FindMemberByChannelID(testChannelID)
+	adapterCtx := adapter.WithContext(ctx)
+	member = adapterCtx.FindMemberByChannelID(testChannelID)
 	if member == nil {
 		log.Fatal("❌ Adapter failed!")
 	}
 	log.Printf("✓ Adapter works: %s", member.Name)
 
-	channelIDs := adapter.GetChannelIDs()
+	channelIDs := adapterCtx.GetChannelIDs()
 	log.Printf("✓ Adapter GetChannelIDs: %d channels", len(channelIDs))
 
-	allMembers := adapter.GetAllMembers()
+	allMembers := adapterCtx.GetAllMembers()
 	log.Printf("✓ Adapter GetAllMembers: %d members", len(allMembers))
 
 	log.Println()

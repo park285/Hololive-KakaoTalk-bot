@@ -4,14 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"math"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/kapu/hololive-kakao-bot-go/internal/constants"
@@ -49,17 +45,10 @@ type HolodexStreamRaw struct {
 }
 
 type HolodexService struct {
-	httpClient       *http.Client
-	apiKeys          []string
-	currentKeyIndex  int
-	keyMu            sync.Mutex
-	cache            *CacheService
-	scraper          *ScraperService // Fallback scraper
-	logger           *zap.Logger
-	failureCount     int
-	failureMu        sync.Mutex // Protects failureCount
-	circuitOpenUntil *time.Time
-	circuitMu        sync.RWMutex
+	requester HolodexRequester
+	cache     *CacheService
+	scraper   *ScraperService // Fallback scraper
+	logger    *zap.Logger
 }
 
 func NewHolodexService(apiKeys []string, cache *CacheService, scraper *ScraperService, logger *zap.Logger) (*HolodexService, error) {
@@ -67,204 +56,18 @@ func NewHolodexService(apiKeys []string, cache *CacheService, scraper *ScraperSe
 		return nil, fmt.Errorf("at least one Holodex API key is required")
 	}
 
+	httpClient := &http.Client{
+		Timeout: constants.APIConfig.HolodexTimeout,
+	}
+
+	requester := NewHolodexAPIClient(httpClient, apiKeys, logger)
+
 	return &HolodexService{
-		httpClient: &http.Client{
-			Timeout: constants.APIConfig.HolodexTimeout,
-		},
-		apiKeys:         apiKeys,
-		currentKeyIndex: 0,
-		cache:           cache,
-		scraper:         scraper,
-		logger:          logger,
-		failureCount:    0,
+		requester: requester,
+		cache:     cache,
+		scraper:   scraper,
+		logger:    logger,
 	}, nil
-}
-
-func (h *HolodexService) getNextAPIKey() string {
-	h.keyMu.Lock()
-	defer h.keyMu.Unlock()
-
-	key := h.apiKeys[h.currentKeyIndex]
-	h.currentKeyIndex = (h.currentKeyIndex + 1) % len(h.apiKeys)
-	return key
-}
-
-func (h *HolodexService) isCircuitOpen() bool {
-	h.circuitMu.RLock()
-	defer h.circuitMu.RUnlock()
-
-	if h.circuitOpenUntil == nil {
-		return false
-	}
-
-	if time.Now().After(*h.circuitOpenUntil) {
-		return false
-	}
-
-	return true
-}
-
-func (h *HolodexService) openCircuit() {
-	h.circuitMu.Lock()
-	defer h.circuitMu.Unlock()
-
-	resetTime := time.Now().Add(constants.CircuitBreakerConfig.ResetTimeout)
-	h.circuitOpenUntil = &resetTime
-	h.failureCount = 0
-
-	h.logger.Error("Holodex circuit breaker opened",
-		zap.Duration("reset_timeout", constants.CircuitBreakerConfig.ResetTimeout),
-	)
-}
-
-func (h *HolodexService) resetCircuit() {
-	h.circuitMu.Lock()
-	defer h.circuitMu.Unlock()
-
-	h.failureMu.Lock()
-	h.failureCount = 0
-	h.failureMu.Unlock()
-
-	h.circuitOpenUntil = nil
-}
-
-func (h *HolodexService) incrementFailureCount() int {
-	h.failureMu.Lock()
-	defer h.failureMu.Unlock()
-	h.failureCount++
-	return h.failureCount
-}
-
-func (h *HolodexService) getFailureCount() int {
-	h.failureMu.Lock()
-	defer h.failureMu.Unlock()
-	return h.failureCount
-}
-
-func (h *HolodexService) computeDelay(attempt int) time.Duration {
-	jitter := time.Duration(rand.Float64() * float64(constants.RetryConfig.Jitter))
-	base := constants.RetryConfig.BaseDelay * time.Duration(math.Pow(2, float64(attempt)))
-	return base + jitter
-}
-
-func (h *HolodexService) doRequest(ctx context.Context, method, path string, params url.Values) ([]byte, error) {
-	if h.isCircuitOpen() {
-		h.circuitMu.RLock()
-		var remainingMs int64
-		if h.circuitOpenUntil != nil {
-			remainingMs = time.Until(*h.circuitOpenUntil).Milliseconds()
-		}
-		h.circuitMu.RUnlock()
-
-		h.logger.Warn("Circuit breaker is open", zap.Int64("retry_after_ms", remainingMs))
-		return nil, errors.NewAPIError("Circuit breaker open", 503, map[string]any{
-			"retry_after_ms": remainingMs,
-		})
-	}
-
-	maxAttempts := util.Min(len(h.apiKeys)*2, 10)
-	var lastErr error
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		apiKey := h.getNextAPIKey()
-
-		reqURL := constants.APIConfig.HolodexBaseURL + path
-		if params != nil {
-			reqURL += "?" + params.Encode()
-		}
-
-		req, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-APIKEY", apiKey)
-
-		resp, err := h.httpClient.Do(req)
-		if err != nil {
-			lastErr = err
-			count := h.incrementFailureCount()
-
-			if count >= constants.CircuitBreakerConfig.FailureThreshold {
-				h.openCircuit()
-				break
-			}
-
-			if attempt < maxAttempts-1 {
-				delay := h.computeDelay(attempt)
-				h.logger.Warn("Request failed, retrying",
-					zap.Error(err),
-					zap.Int("attempt", attempt+1),
-					zap.Duration("delay", delay),
-				)
-				time.Sleep(delay)
-				continue
-			}
-			break
-		}
-
-		// Read body and close immediately (not defer in loop!)
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		if resp.StatusCode == 429 || resp.StatusCode == 403 {
-			h.logger.Warn("Rate limited, rotating key",
-				zap.Int("status", resp.StatusCode),
-				zap.Int("attempt", attempt+1),
-			)
-
-			if attempt < maxAttempts-1 {
-				continue // Immediate retry with next key
-			}
-
-			return nil, errors.NewKeyRotationError("All API keys rate limited", resp.StatusCode, map[string]any{
-				"url": reqURL,
-			})
-		}
-
-		if resp.StatusCode >= 500 {
-			count := h.incrementFailureCount()
-			h.logger.Warn("Server error",
-				zap.Int("status", resp.StatusCode),
-				zap.Int("failure_count", count),
-			)
-
-			if count >= constants.CircuitBreakerConfig.FailureThreshold {
-				h.openCircuit()
-				break
-			}
-
-			if attempt < maxAttempts-1 {
-				delay := h.computeDelay(attempt)
-				time.Sleep(delay)
-				continue
-			}
-
-			return nil, errors.NewAPIError(fmt.Sprintf("Server error: %d", resp.StatusCode), resp.StatusCode, nil)
-		}
-
-		if resp.StatusCode >= 400 {
-			return nil, errors.NewAPIError(fmt.Sprintf("Client error: %d", resp.StatusCode), resp.StatusCode, map[string]any{
-				"url":  reqURL,
-				"body": string(body),
-			})
-		}
-
-		h.resetCircuit()
-		return body, nil
-	}
-
-	if lastErr != nil {
-		return nil, lastErr
-	}
-
-	return nil, errors.NewAPIError("Holodex request failed after all retries", 502, nil)
 }
 
 func (h *HolodexService) GetLiveStreams(ctx context.Context) ([]*domain.Stream, error) {
@@ -280,7 +83,7 @@ func (h *HolodexService) GetLiveStreams(ctx context.Context) ([]*domain.Stream, 
 	params.Set("status", "live")
 	params.Set("type", "stream")
 
-	body, err := h.doRequest(ctx, "GET", "/live", params)
+	body, err := h.requester.DoRequest(ctx, "GET", "/live", params)
 	if err != nil {
 		h.logger.Error("Failed to get live streams", zap.Error(err))
 		return nil, err
@@ -315,7 +118,7 @@ func (h *HolodexService) GetUpcomingStreams(ctx context.Context, hours int) ([]*
 	params.Set("order", "asc")
 	params.Set("orderby", "start_scheduled")
 
-	body, err := h.doRequest(ctx, "GET", "/live", params)
+	body, err := h.requester.DoRequest(ctx, "GET", "/live", params)
 	if err != nil {
 		h.logger.Error("Failed to get upcoming streams", zap.Error(err))
 		return nil, err
@@ -376,7 +179,7 @@ func (h *HolodexService) GetChannelSchedule(ctx context.Context, channelID strin
 		params.Set("type", "stream")
 		params.Set("max_upcoming_hours", fmt.Sprintf("%d", hours))
 
-		body, err := h.doRequest(ctx, "GET", "/live", params)
+		body, err := h.requester.DoRequest(ctx, "GET", "/live", params)
 		if err != nil {
 			h.logger.Error("Failed to get channel schedule",
 				zap.String("channel_id", channelID),
@@ -441,7 +244,7 @@ func (h *HolodexService) SearchChannels(ctx context.Context, query string) ([]*d
 	params.Set("name", query)
 	params.Set("limit", "50")
 
-	body, err := h.doRequest(ctx, "GET", "/channels", params)
+	body, err := h.requester.DoRequest(ctx, "GET", "/channels", params)
 	if err != nil {
 		h.logger.Error("Failed to search channels", zap.String("query", query), zap.Error(err))
 		return nil, err
@@ -481,7 +284,7 @@ func (h *HolodexService) GetChannel(ctx context.Context, channelID string) (*dom
 		return &cached, nil
 	}
 
-	body, err := h.doRequest(ctx, "GET", "/channels/"+channelID, nil)
+	body, err := h.requester.DoRequest(ctx, "GET", "/channels/"+channelID, nil)
 	if err != nil {
 		if apiErr, ok := err.(*errors.APIError); ok && apiErr.StatusCode == 404 {
 			return nil, nil
@@ -663,7 +466,7 @@ func (h *HolodexService) shouldUseFallback(err error) bool {
 		return false
 	}
 
-	if h.isCircuitOpen() {
+	if h.requester != nil && h.requester.IsCircuitOpen() {
 		return true
 	}
 

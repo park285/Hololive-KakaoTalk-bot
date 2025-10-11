@@ -74,14 +74,16 @@ func (c *MemberInfoCommand) Execute(ctx context.Context, cmdCtx *domain.CommandC
 }
 
 func (c *MemberInfoCommand) resolveMember(ctx context.Context, channelID, englishName, query string) *domain.Member {
+	provider := c.deps.MembersData.WithContext(ctx)
+
 	if channelID != "" {
-		if member := c.deps.MembersData.FindMemberByChannelID(channelID); member != nil {
+		if member := provider.FindMemberByChannelID(channelID); member != nil {
 			return member
 		}
 	}
 
 	if englishName != "" {
-		if member := c.deps.MembersData.FindMemberByName(englishName); member != nil {
+		if member := provider.FindMemberByName(englishName); member != nil {
 			return member
 		}
 	}
@@ -103,7 +105,7 @@ func (c *MemberInfoCommand) resolveMember(ctx context.Context, channelID, englis
 		return nil
 	}
 
-	return c.deps.MembersData.FindMemberByChannelID(channel.ID)
+	return provider.FindMemberByChannelID(channel.ID)
 }
 
 func (c *MemberInfoCommand) log() *zap.Logger {

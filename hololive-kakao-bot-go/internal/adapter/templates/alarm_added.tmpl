@@ -1,0 +1,11 @@
+{{- if .Added -}}
+✅ {{.MemberName}} 알람이 설정되었습니다!
+
+{{- if .NextInfo -}}
+{{.NextInfo}}
+
+{{- end -}}방송 시작 5분 전에 알림을 받습니다.
+{{.Prefix}}알람 목록 으로 확인 가능합니다.
+{{- else -}}
+ℹ️ {{.MemberName}} 알람이 이미 설정되어 있습니다.
+{{- end -}}

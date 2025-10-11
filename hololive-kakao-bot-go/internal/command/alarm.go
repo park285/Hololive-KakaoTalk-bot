@@ -26,6 +26,10 @@ func (c *AlarmCommand) Description() string {
 }
 
 func (c *AlarmCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
+	if err := c.ensureDeps(); err != nil {
+		return err
+	}
+
 	if c.deps.Alarm == nil {
 		return c.deps.SendError(cmdCtx.Room, "알람 서비스가 초기화되지 않았습니다.")
 	}
@@ -48,6 +52,26 @@ func (c *AlarmCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContex
 	default:
 		return c.deps.SendMessage(cmdCtx.Room, c.deps.Formatter.FormatHelp())
 	}
+}
+
+func (c *AlarmCommand) ensureDeps() error {
+	if c == nil || c.deps == nil {
+		return fmt.Errorf("alarm command dependencies not configured")
+	}
+
+	if c.deps.SendMessage == nil || c.deps.SendError == nil {
+		return fmt.Errorf("message callbacks not configured")
+	}
+
+	if c.deps.Matcher == nil || c.deps.Formatter == nil {
+		return fmt.Errorf("alarm command services not configured")
+	}
+
+	if c.deps.Logger == nil {
+		c.deps.Logger = zap.NewNop()
+	}
+
+	return nil
 }
 
 func (c *AlarmCommand) handleAdd(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {

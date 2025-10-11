@@ -17,12 +17,16 @@ type MatchCacheEntry struct {
 	Timestamp time.Time
 }
 
+type ChannelSelector interface {
+	SelectBestChannel(ctx context.Context, query string, candidates []*domain.Channel) (*domain.Channel, error)
+}
+
 type MemberMatcher struct {
 	membersData   domain.MemberDataProvider
 	aliasToName   map[string]string
 	cache         *CacheService
 	holodex       *HolodexService
-	geminiService *GeminiService
+	selector      ChannelSelector
 	logger        *zap.Logger
 	matchCache    map[string]*MatchCacheEntry
 	matchCacheMu  sync.RWMutex
@@ -33,36 +37,39 @@ func NewMemberMatcher(
 	membersData domain.MemberDataProvider,
 	cache *CacheService,
 	holodex *HolodexService,
+	selector ChannelSelector,
 	logger *zap.Logger,
+	ctx context.Context,
 ) *MemberMatcher {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	mm := &MemberMatcher{
 		membersData:   membersData,
 		cache:         cache,
 		holodex:       holodex,
+		selector:      selector,
 		logger:        logger,
 		matchCache:    make(map[string]*MatchCacheEntry),
 		matchCacheTTL: 1 * time.Minute,
 	}
 
-	mm.aliasToName = mm.buildAliasMap()
+	provider := membersData.WithContext(ctx)
+	mm.aliasToName = mm.buildAliasMap(provider)
 
 	logger.Info("MemberMatcher initialized",
-		zap.Int("members", len(membersData.GetAllMembers())),
+		zap.Int("members", len(provider.GetAllMembers())),
 		zap.Int("aliases", len(mm.aliasToName)),
 	)
 
 	return mm
 }
 
-func (mm *MemberMatcher) SetGeminiService(gemini *GeminiService) {
-	mm.geminiService = gemini
-	mm.logger.Info("MemberMatcher: Gemini service enabled for smart channel selection")
-}
-
-func (mm *MemberMatcher) buildAliasMap() map[string]string {
+func (mm *MemberMatcher) buildAliasMap(provider domain.MemberDataProvider) map[string]string {
 	aliasMap := make(map[string]string)
 
-	for _, member := range mm.membersData.GetAllMembers() {
+	for _, member := range provider.GetAllMembers() {
 		aliasMap[strings.ToLower(member.Name)] = member.Name
 
 		if member.NameJa != "" {
@@ -92,6 +99,8 @@ func (mm *MemberMatcher) tryExactAliasMatch(ctx context.Context, queryNorm strin
 		return nil, nil
 	}
 
+	provider := mm.membersData.WithContext(ctx)
+
 	// Try Redis cache first
 	if channelID, err := mm.cache.GetMemberChannelID(ctx, englishName); err == nil && channelID != "" {
 		if channel, err := mm.holodex.GetChannel(ctx, channelID); err == nil && channel != nil {
@@ -100,7 +109,7 @@ func (mm *MemberMatcher) tryExactAliasMatch(ctx context.Context, queryNorm strin
 	}
 
 	// Fallback to static data
-	if member := mm.membersData.FindMemberByName(englishName); member != nil {
+	if member := provider.FindMemberByName(englishName); member != nil {
 		if channel, err := mm.holodex.GetChannel(ctx, member.ChannelID); err == nil && channel != nil {
 			return channel, nil
 		}
@@ -123,7 +132,8 @@ func (mm *MemberMatcher) tryExactRedisMatch(ctx context.Context, query string, d
 
 // tryPartialStaticMatch attempts partial match in static member data
 func (mm *MemberMatcher) tryPartialStaticMatch(ctx context.Context, queryNorm string) (*domain.Channel, error) {
-	for _, member := range mm.membersData.GetAllMembers() {
+	provider := mm.membersData.WithContext(ctx)
+	for _, member := range provider.GetAllMembers() {
 		nameNorm := util.Normalize(member.Name)
 		if strings.Contains(nameNorm, queryNorm) || strings.Contains(queryNorm, nameNorm) {
 			if channel, err := mm.holodex.GetChannel(ctx, member.ChannelID); err == nil && channel != nil {
@@ -149,7 +159,8 @@ func (mm *MemberMatcher) tryPartialRedisMatch(ctx context.Context, queryNorm str
 
 // tryPartialAliasMatch attempts partial match across all aliases
 func (mm *MemberMatcher) tryPartialAliasMatch(ctx context.Context, queryNorm string) (*domain.Channel, error) {
-	for _, member := range mm.membersData.GetAllMembers() {
+	provider := mm.membersData.WithContext(ctx)
+	for _, member := range provider.GetAllMembers() {
 		for _, alias := range member.GetAllAliases() {
 			aliasNorm := util.Normalize(alias)
 			if strings.Contains(aliasNorm, queryNorm) || strings.Contains(queryNorm, aliasNorm) {
@@ -191,26 +202,26 @@ func (mm *MemberMatcher) selectBestFromCandidates(ctx context.Context, query str
 		return channels[0], nil
 	}
 
-	// Multiple candidates - use Gemini AI
-	if mm.geminiService == nil {
+	// Multiple candidates - use selector strategy
+	if mm.selector == nil {
 		mm.logger.Info("No Gemini service - using first result", zap.String("channel", channels[0].Name))
 		return channels[0], nil
 	}
 
-	mm.logger.Info("Gemini AI selection", zap.Int("candidates", len(channels)))
+	mm.logger.Info("Channel selector evaluation", zap.Int("candidates", len(channels)))
 
-	selected, err := mm.geminiService.SelectBestChannel(ctx, query, channels)
+	selected, err := mm.selector.SelectBestChannel(ctx, query, channels)
 	if err != nil {
-		mm.logger.Warn("Gemini selection failed", zap.Error(err))
+		mm.logger.Warn("Channel selector failed", zap.Error(err))
 		return nil, nil
 	}
 
 	if selected != nil {
-		mm.logger.Info("Gemini selected", zap.String("channel", selected.Name))
+		mm.logger.Info("Selector chose channel", zap.String("channel", selected.Name))
 		return selected, nil
 	}
 
-	mm.logger.Warn("Gemini returned no match")
+	mm.logger.Warn("Selector returned no match")
 	return nil, nil
 }
 
@@ -304,9 +315,9 @@ func (mm *MemberMatcher) findBestMatchImpl(ctx context.Context, query string) (*
 }
 
 func (mm *MemberMatcher) GetAllMembers() []*domain.Member {
-	return mm.membersData.GetAllMembers()
+	return mm.membersData.WithContext(context.Background()).GetAllMembers()
 }
 
 func (mm *MemberMatcher) GetMemberByChannelID(channelID string) *domain.Member {
-	return mm.membersData.FindMemberByChannelID(channelID)
+	return mm.membersData.WithContext(context.Background()).FindMemberByChannelID(channelID)
 }

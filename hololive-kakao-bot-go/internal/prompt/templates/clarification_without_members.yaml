@@ -1,0 +1,21 @@
+User question: "{{.UserQuery}}"
+
+Analyze using the Hololive member list above.
+
+Return JSON:
+{
+  "is_hololive_related": true or false,
+  "message": "Korean clarification message if hololive-related, empty otherwise",
+  "candidate": "member name if 80%+ confident, empty otherwise"
+}
+
+Rules:
+- ALL messages MUST be in Korean (절대 영어 금지)
+- is_hololive_related=true if:
+  * Asking about any person (even if not in member list)
+  * About Hololive content/schedules
+- If person NOT in list:
+  * is_hololive_related=true
+  * message: "누구를 말씀하신 건지 잘 모르겠어요. \"<person>\"를 말씀하신 건가요? 홀로라이브 소속이 맞는지 확인하신 뒤 다시 질문해 주세요."
+- Candidate only if 80%+ confident, else empty
+- Focus on CORE INTENT, ignore all grammar/conjugation differences

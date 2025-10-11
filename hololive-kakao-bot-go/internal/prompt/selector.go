@@ -1,59 +1,29 @@
 package prompt
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
-)
-
-type CandidateChannel struct {
-	Index       int
-	Name        string
-	EnglishName string
-	ID          string
-}
-
-type SelectorPromptVars struct {
-	UserQuery         string
-	CandidateChannels []CandidateChannel
-}
+import "github.com/kapu/hololive-kakao-bot-go/internal/domain"
 
 func BuildSelector(userQuery string, channels []*domain.Channel) string {
-	candidates := make([]string, len(channels))
+	data := ChannelSelectorData{
+		UserQuery:         userQuery,
+		CandidateChannels: make([]ChannelCandidate, len(channels)),
+	}
+
 	for i, ch := range channels {
 		englishName := "N/A"
 		if ch.EnglishName != nil {
 			englishName = *ch.EnglishName
 		}
-		candidates[i] = fmt.Sprintf("%d. %s (English: %s, ID: %s)",
-			i, ch.Name, englishName, ch.ID)
+		data.CandidateChannels[i] = ChannelCandidate{
+			Index:       i,
+			Name:        ch.Name,
+			EnglishName: englishName,
+			ID:          ch.ID,
+		}
 	}
 
-	channelList := strings.Join(candidates, "\n")
-
-	return fmt.Sprintf(`You are a VTuber channel matcher for Hololive.
-
-**User Query:** "%s"
-
-**Candidate Channels:**
-%s
-
-**Task:** Select the channel that BEST matches the user query.
-
-**Output JSON Format:**
-{
-  "selectedIndex": <number, 0-based index of best match, or -1 if no good match>,
-  "confidence": <number, 0.0 to 1.0>,
-  "reasoning": "<brief explanation in Korean>"
-}
-
-**Matching Priority:**
-1. Exact name match (any language)
-2. Exact ID match
-3. Partial name match (start with)
-4. If confidence < 0.7, return selectedIndex: -1`,
-		userQuery,
-		channelList,
-	)
+	text, err := DefaultPromptBuilder().Render(TemplateChannelSelector, data)
+	if err != nil {
+		return ""
+	}
+	return text
 }

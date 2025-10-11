@@ -24,6 +24,10 @@ func (c *ScheduleCommand) Description() string {
 }
 
 func (c *ScheduleCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
+	if err := c.ensureDeps(); err != nil {
+		return err
+	}
+
 	memberName, hasMember := params["member"].(string)
 	if !hasMember || memberName == "" {
 		return c.deps.SendError(cmdCtx.Room, "멤버 이름을 지정해주세요.\n예) !일정 페코라")
@@ -62,4 +66,20 @@ func (c *ScheduleCommand) Execute(ctx context.Context, cmdCtx *domain.CommandCon
 
 	message := c.deps.Formatter.FormatChannelSchedule(channel, streams, days)
 	return c.deps.SendMessage(cmdCtx.Room, message)
+}
+
+func (c *ScheduleCommand) ensureDeps() error {
+	if c == nil || c.deps == nil {
+		return fmt.Errorf("schedule command dependencies not configured")
+	}
+
+	if c.deps.SendMessage == nil || c.deps.SendError == nil {
+		return fmt.Errorf("message callbacks not configured")
+	}
+
+	if c.deps.Matcher == nil || c.deps.Holodex == nil || c.deps.Formatter == nil {
+		return fmt.Errorf("schedule command services not configured")
+	}
+
+	return nil
 }

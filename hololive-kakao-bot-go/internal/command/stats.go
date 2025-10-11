@@ -27,16 +27,8 @@ func (c *StatsCommand) Description() string {
 }
 
 func (c *StatsCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
-	if c.deps == nil || c.deps.StatsRepo == nil {
-		return c.deps.SendError(cmdCtx.Room, "통계 기능이 활성화되지 않았습니다.")
-	}
-
-	if c.deps.SendError == nil || c.deps.SendMessage == nil {
-		return fmt.Errorf("message callbacks not configured")
-	}
-
-	if c.deps.Logger == nil {
-		c.deps.Logger = zap.NewNop()
+	if err := c.ensureDeps(cmdCtx); err != nil {
+		return err
 	}
 
 	action, _ := params["action"].(string)
@@ -54,18 +46,8 @@ func (c *StatsCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContex
 
 func (c *StatsCommand) showTopGainers(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
 	periodStr, _ := params["period"].(string)
-	var since time.Time
-
-	switch strings.ToLower(periodStr) {
-	case "오늘", "today":
-		since = time.Now().Add(-24 * time.Hour)
-	case "주간", "week":
-		since = time.Now().Add(-7 * 24 * time.Hour)
-	case "월간", "month":
-		since = time.Now().Add(-30 * 24 * time.Hour)
-	default:
-		since = time.Now().Add(-7 * 24 * time.Hour) // Default: 7 days
-	}
+	now := time.Now()
+	since, periodLabel := determinePeriod(now, periodStr)
 
 	gainers, err := c.deps.StatsRepo.GetTopGainers(ctx, since, 10)
 	if err != nil {
@@ -78,7 +60,7 @@ func (c *StatsCommand) showTopGainers(ctx context.Context, cmdCtx *domain.Comman
 	}
 
 	var builder strings.Builder
-	builder.WriteString("📊 구독자 증가 순위 (지난 7일)\n\n")
+	builder.WriteString(fmt.Sprintf("📊 구독자 증가 순위 (%s)\n\n", periodLabel))
 
 	for _, entry := range gainers {
 		builder.WriteString(fmt.Sprintf("%d위. %s\n", entry.Rank, entry.MemberName))
@@ -86,6 +68,42 @@ func (c *StatsCommand) showTopGainers(ctx context.Context, cmdCtx *domain.Comman
 	}
 
 	return c.deps.SendMessage(cmdCtx.Room, builder.String())
+}
+
+func determinePeriod(now time.Time, raw string) (time.Time, string) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "오늘", "today":
+		return now.Add(-24 * time.Hour), "오늘"
+	case "주간", "week":
+		return now.Add(-7 * 24 * time.Hour), "지난 7일"
+	case "월간", "month":
+		return now.Add(-30 * 24 * time.Hour), "지난 30일"
+	default:
+		return now.Add(-7 * 24 * time.Hour), "지난 7일"
+	}
+}
+
+func (c *StatsCommand) ensureDeps(cmdCtx *domain.CommandContext) error {
+	if c == nil || c.deps == nil {
+		return fmt.Errorf("stats command dependencies not configured")
+	}
+
+	if c.deps.SendMessage == nil || c.deps.SendError == nil {
+		return fmt.Errorf("message callbacks not configured")
+	}
+
+	if c.deps.StatsRepo == nil {
+		if cmdCtx != nil {
+			return c.deps.SendError(cmdCtx.Room, "통계 기능이 활성화되지 않았습니다.")
+		}
+		return fmt.Errorf("stats repository not configured")
+	}
+
+	if c.deps.Logger == nil {
+		c.deps.Logger = zap.NewNop()
+	}
+
+	return nil
 }
 
 func formatSubscriberGain(n int64) string {

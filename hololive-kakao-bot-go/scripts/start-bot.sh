@@ -112,8 +112,8 @@ echo "[OK] Iris server detected on port $IRIS_PORT"
 
 # === 7. 봇 시작 ===
 echo "[RUN] Starting bot with optimized GC settings..."
-# GOGC=50: GC 더 자주 실행하여 메모리 단편화 방지
-GOGC=50 nohup ./bin/bot > "$NOHUP_LOG" 2>&1 &
+# GOGC=200: GC 주기를 완화하여 CPU 사용량 감소 시도
+GOGC=200 nohup ./bin/bot > "$NOHUP_LOG" 2>&1 &
 BOT_PID=$!
 
 # PID 저장

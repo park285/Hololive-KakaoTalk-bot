@@ -1,0 +1,14 @@
+{{- if eq .Count 0 -}}
+📅 {{.Hours}}시간 이내 예정된 방송이 없습니다.
+{{- else -}}
+📅 예정된 방송 ({{.Hours}}시간 이내, {{.Count}}개)
+
+{{- range $index, $stream := .Streams -}}
+{{- if gt $index 0 }}
+
+{{- end -}}📺 {{$stream.ChannelName}}
+   {{$stream.Title}}
+   ⏰ {{$stream.TimeInfo}}
+   {{$stream.URL}}
+{{- end -}}
+{{- end -}}

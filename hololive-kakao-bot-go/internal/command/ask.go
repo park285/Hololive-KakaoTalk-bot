@@ -4,16 +4,28 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"unicode"
 
 	"github.com/kapu/hololive-kakao-bot-go/internal/domain"
-	"github.com/kapu/hololive-kakao-bot-go/internal/util"
+	"github.com/kapu/hololive-kakao-bot-go/internal/service"
 	"go.uber.org/zap"
 )
 
 type AskCommand struct {
 	deps *Dependencies
 }
+
+type askWorkflow struct {
+	ctx      context.Context
+	deps     *Dependencies
+	cmdCtx   *domain.CommandContext
+	provider domain.MemberDataProvider
+	logger   *zap.Logger
+}
+
+const (
+	askUnsupportedMessage = "요청을 이해하지 못했습니다. ❓지원하지 않는 명령어입니다. !도움말 명령어를 참고해주세요."
+	minAskConfidence      = 0.5
+)
 
 func NewAskCommand(deps *Dependencies) *AskCommand {
 	return &AskCommand{deps: deps}
@@ -28,151 +40,180 @@ func (c *AskCommand) Description() string {
 }
 
 func (c *AskCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
-	if c.deps == nil || c.deps.Gemini == nil || c.deps.MembersData == nil || c.deps.ExecuteCommand == nil {
-		if c.deps != nil && c.deps.SendError != nil {
-			return c.deps.SendError(cmdCtx.Room, "AI 서비스가 준비되지 않았습니다. 잠시 후 다시 시도해주세요.")
-		}
-		return fmt.Errorf("AI services not configured")
+	workflow, err := c.prepareWorkflow(ctx, cmdCtx)
+	if err != nil {
+		return err
 	}
 
-	if c.deps.SendError == nil || c.deps.SendMessage == nil {
-		return fmt.Errorf("message callbacks not configured")
+	question := c.extractQuestion(params)
+	if question == "" {
+		return workflow.deps.SendError(cmdCtx.Room, "질문을 이해하지 못했습니다. 다시 입력해주세요.")
 	}
 
-	if c.deps.Logger == nil {
-		c.deps.Logger = zap.NewNop()
+	workflow.logger.Info("Processing natural language question", zap.String("question", question))
+
+	parseResults, metadata, err := workflow.deps.Gemini.ParseNaturalLanguage(ctx, question, workflow.provider)
+	if err != nil {
+		return workflow.deps.SendError(cmdCtx.Room, err.Error())
+	}
+
+	validResults := workflow.filterValidResults(question, parseResults.GetCommands())
+	if len(validResults) == 0 {
+		return workflow.handleNoCommand(question)
+	}
+
+	executed, err := workflow.delegateCommands(question, validResults)
+	if err != nil {
+		return err
+	}
+
+	if executed == 0 {
+		return workflow.handleNoCommand(question)
+	}
+
+	workflow.logMetadata(metadata, executed)
+	return nil
+}
+
+func (c *AskCommand) prepareWorkflow(ctx context.Context, cmdCtx *domain.CommandContext) (*askWorkflow, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
 	}
 
 	if cmdCtx == nil {
-		return fmt.Errorf("command context is nil")
+		return nil, fmt.Errorf("command context is nil")
 	}
 
-	if ctx == nil {
-		return fmt.Errorf("context is nil")
+	if c == nil || c.deps == nil {
+		return nil, fmt.Errorf("ask command dependencies not configured")
 	}
 
+	if c.deps.SendError == nil || c.deps.SendMessage == nil {
+		return nil, fmt.Errorf("message callbacks not configured")
+	}
+
+	if c.deps.Gemini == nil || c.deps.MembersData == nil || c.deps.ExecuteCommand == nil {
+		return nil, c.deps.SendError(cmdCtx.Room, "AI 서비스가 준비되지 않았습니다. 잠시 후 다시 시도해주세요.")
+	}
+
+	logger := c.deps.Logger
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+
+	provider := c.deps.MembersData.WithContext(ctx)
+
+	return &askWorkflow{
+		ctx:      ctx,
+		deps:     c.deps,
+		cmdCtx:   cmdCtx,
+		provider: provider,
+		logger:   logger,
+	}, nil
+}
+
+func (c *AskCommand) extractQuestion(params map[string]any) string {
 	rawQuestion, _ := params["question"].(string)
-	question := strings.TrimSpace(rawQuestion)
-	if question == "" {
-		return c.deps.SendError(cmdCtx.Room, "질문을 이해하지 못했습니다. 다시 입력해주세요.")
-	}
+	return strings.TrimSpace(rawQuestion)
+}
 
-	c.deps.Logger.Info("Processing natural language question", zap.String("question", question))
-
-	parseResults, metadata, err := c.deps.Gemini.ParseNaturalLanguage(ctx, question, c.deps.MembersData)
-	if err != nil {
-		return c.deps.SendError(cmdCtx.Room, err.Error())
-	}
-
-	commands := parseResults.GetCommands()
-	if len(commands) == 0 {
-		if c.tryMemberInfo(ctx, cmdCtx, question) {
-			return nil
-		}
-		return c.deps.SendMessage(cmdCtx.Room, "요청을 이해하지 못했습니다. ❓지원하지 않는 명령어입니다. !도움말 명령어를 참고해주세요.")
-	}
-
-	const minConfidence = 0.5
-
+func (w *askWorkflow) filterValidResults(question string, commands []*domain.ParseResult) []*domain.ParseResult {
 	validResults := make([]*domain.ParseResult, 0, len(commands))
+
 	for _, result := range commands {
 		if result == nil {
 			continue
 		}
 
-		if result.Confidence < minConfidence {
-			if c.deps.Logger != nil {
-				c.deps.Logger.Warn("Skipping low-confidence command",
-					zap.String("question", question),
-					zap.String("command", result.Command.String()),
-					zap.Float64("confidence", result.Confidence),
-				)
-			}
+		if result.Confidence < minAskConfidence {
+			w.logger.Warn("Skipping low-confidence command",
+				zap.String("question", question),
+				zap.String("command", result.Command.String()),
+				zap.Float64("confidence", result.Confidence),
+			)
 			continue
 		}
 
 		switch result.Command {
 		case domain.CommandUnknown, domain.CommandAsk:
-			if c.deps.Logger != nil {
-				c.deps.Logger.Debug("Skipping non-actionable command",
-					zap.String("command", result.Command.String()),
-					zap.Float64("confidence", result.Confidence),
-				)
-			}
+			w.logger.Debug("Skipping non-actionable command",
+				zap.String("command", result.Command.String()),
+				zap.Float64("confidence", result.Confidence),
+			)
 			continue
 		}
 
 		validResults = append(validResults, result)
 	}
 
-	if len(validResults) == 0 {
-		if c.tryMemberInfo(ctx, cmdCtx, question) {
-			return nil
-		}
-		return c.deps.SendMessage(cmdCtx.Room, "요청을 이해하지 못했습니다. ❓지원하지 않는 명령어입니다. !도움말 명령어를 참고해주세요.")
-	}
+	return validResults
+}
 
+func (w *askWorkflow) delegateCommands(question string, results []*domain.ParseResult) (int, error) {
 	executed := 0
-	for _, result := range validResults {
-		if c.deps.Logger != nil {
-			c.deps.Logger.Debug("Delegating parsed command",
-				zap.String("question", question),
-				zap.String("command", result.Command.String()),
-				zap.Float64("confidence", result.Confidence),
-				zap.Any("params", result.Params),
-			)
-		}
+
+	for _, result := range results {
+		w.logger.Debug("Delegating parsed command",
+			zap.String("question", question),
+			zap.String("command", result.Command.String()),
+			zap.Float64("confidence", result.Confidence),
+			zap.Any("params", result.Params),
+		)
 
 		forwardParams := make(map[string]any, len(result.Params))
 		for k, v := range result.Params {
 			forwardParams[k] = v
 		}
 
-		if err := c.deps.ExecuteCommand(ctx, cmdCtx, result.Command, forwardParams); err != nil {
-			return err
+		if err := w.deps.ExecuteCommand(w.ctx, w.cmdCtx, result.Command, forwardParams); err != nil {
+			return executed, err
 		}
 
 		executed++
 	}
 
-	if executed == 0 {
-		if c.tryMemberInfo(ctx, cmdCtx, question) {
-			return nil
-		}
-		return c.deps.SendMessage(cmdCtx.Room, "요청을 이해하지 못했습니다. ❓지원하지 않는 명령어입니다. !도움말 명령어를 참고해주세요.")
-	}
-
-	if metadata != nil && c.deps.Logger != nil {
-		c.deps.Logger.Info("Natural language query processed",
-			zap.String("provider", metadata.Provider),
-			zap.String("model", metadata.Model),
-			zap.Bool("used_fallback", metadata.UsedFallback),
-			zap.Int("commands_executed", executed),
-		)
-	}
-
-	return nil
+	return executed, nil
 }
 
-func (c *AskCommand) tryMemberInfo(ctx context.Context, cmdCtx *domain.CommandContext, question string) bool {
-	if c.deps == nil || c.deps.Matcher == nil || c.deps.ExecuteCommand == nil {
+func (w *askWorkflow) handleNoCommand(question string) error {
+	if w.tryMemberInfo(question) {
+		return nil
+	}
+	return w.deps.SendMessage(w.cmdCtx.Room, askUnsupportedMessage)
+}
+
+func (w *askWorkflow) logMetadata(metadata *service.GenerateMetadata, executed int) {
+	if metadata == nil || w.logger == nil {
+		return
+	}
+
+	w.logger.Info("Natural language query processed",
+		zap.String("provider", metadata.Provider),
+		zap.String("model", metadata.Model),
+		zap.Bool("used_fallback", metadata.UsedFallback),
+		zap.Int("commands_executed", executed),
+	)
+}
+
+func (w *askWorkflow) tryMemberInfo(question string) bool {
+	if w.deps == nil || w.deps.Matcher == nil || w.deps.ExecuteCommand == nil {
 		return false
 	}
 
-	channel, err := c.deps.Matcher.FindBestMatch(ctx, question)
+	channel, err := w.deps.Matcher.FindBestMatch(w.ctx, question)
 	var member *domain.Member
 	if err == nil && channel != nil {
-		member = c.deps.MembersData.FindMemberByChannelID(channel.ID)
+		member = w.provider.FindMemberByChannelID(channel.ID)
 	}
 
 	if member == nil {
-		member = c.findMember(question)
+		member = w.findMember(question)
 	}
 
 	if member != nil {
 		channelID := member.ChannelID
 		if channel == nil && channelID != "" {
-			if fetched, fetchErr := c.deps.Matcher.FindBestMatch(ctx, member.Name); fetchErr == nil && fetched != nil {
+			if fetched, fetchErr := w.deps.Matcher.FindBestMatch(w.ctx, member.Name); fetchErr == nil && fetched != nil {
 				channelID = fetched.ID
 			}
 		}
@@ -186,19 +227,19 @@ func (c *AskCommand) tryMemberInfo(ctx context.Context, cmdCtx *domain.CommandCo
 			params["channel_id"] = channelID
 		}
 
-		if err := c.deps.ExecuteCommand(ctx, cmdCtx, domain.CommandMemberInfo, params); err != nil {
-			if c.deps.Logger != nil {
-				c.deps.Logger.Warn("Member info fallback failed",
+		if err := w.deps.ExecuteCommand(w.ctx, w.cmdCtx, domain.CommandMemberInfo, params); err != nil {
+			if w.logger != nil {
+				w.logger.Warn("Member info fallback failed",
 					zap.String("question", question),
 					zap.String("member", member.Name),
 					zap.Error(err),
 				)
 			}
-			return c.handleFallbackFail(ctx, cmdCtx, question)
+			return w.handleFallbackFail(question)
 		}
 
-		if c.deps.Logger != nil {
-			c.deps.Logger.Info("Member info fallback triggered",
+		if w.logger != nil {
+			w.logger.Info("Member info fallback triggered",
 				zap.String("question", question),
 				zap.String("member", member.Name),
 			)
@@ -207,72 +248,20 @@ func (c *AskCommand) tryMemberInfo(ctx context.Context, cmdCtx *domain.CommandCo
 		return true
 	}
 
-	if c.handleFallbackFail(ctx, cmdCtx, question) {
+	if w.handleFallbackFail(question) {
 		return true
 	}
 	return false
 }
 
-func hasExplicitMemberInfoKeyword(question string) bool {
-	normalized := normalizeForMemberInfoIntent(question)
-
-	for _, keyword := range memberInfoKeywordTokens {
-		if strings.Contains(normalized, keyword) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func normalizeForMemberInfoIntent(input string) string {
-	lower := util.Normalize(input)
-	var builder strings.Builder
-	builder.Grow(len(lower))
-
-	for _, r := range lower {
-		if unicode.IsSpace(r) {
-			continue
-		}
-
-		switch r {
-		case '.', ',', '!', '?', '"', '\'', '“', '”', '’', '‘', '、', '。', '·', '…', '-', '~', '～', '―', '–', '—', ':', ';':
-			continue
-		}
-
-		builder.WriteRune(r)
-	}
-
-	return builder.String()
-}
-
-var memberInfoKeywordTokens = []string{
-	"누구",
-	"소개",
-	"소개좀",
-	"소개해",
-	"정보",
-	"정보좀",
-	"프로필",
-	"알려",
-	"who",
-	"whois",
-	"whatis",
-	"tellmeabout",
-	"profile",
-	"describe",
-	"어떤사람",
-	"정체",
-}
-
-func (c *AskCommand) findMember(question string) *domain.Member {
-	if c.deps == nil || c.deps.MembersData == nil {
+func (w *askWorkflow) findMember(question string) *domain.Member {
+	if w.provider == nil {
 		return nil
 	}
 
 	lower := strings.ToLower(question)
 
-	for _, member := range c.deps.MembersData.GetAllMembers() {
+	for _, member := range w.provider.GetAllMembers() {
 		if member == nil {
 			continue
 		}
@@ -298,19 +287,19 @@ func (c *AskCommand) findMember(question string) *domain.Member {
 	return nil
 }
 
-func (c *AskCommand) handleFallbackFail(ctx context.Context, cmdCtx *domain.CommandContext, question string) bool {
-	if c.deps == nil || c.deps.SendMessage == nil {
+func (w *askWorkflow) handleFallbackFail(question string) bool {
+	if w.deps == nil || w.deps.SendMessage == nil {
 		return false
 	}
 
 	sanitizedQuestion := strings.TrimSpace(question)
 	var clarification string
 
-	if c.deps.Gemini != nil && c.deps.MembersData != nil {
-		response, metadata, err := c.deps.Gemini.GenerateSmartClarification(ctx, sanitizedQuestion, c.deps.MembersData)
+	if w.deps.Gemini != nil && w.deps.MembersData != nil {
+		response, metadata, err := w.deps.Gemini.GenerateSmartClarification(w.ctx, sanitizedQuestion, w.provider)
 		if err == nil && response != nil {
-			if metadata != nil && c.deps.Logger != nil {
-				c.deps.Logger.Info("Smart clarification generated",
+			if metadata != nil && w.logger != nil {
+				w.logger.Info("Smart clarification generated",
 					zap.String("question", sanitizedQuestion),
 					zap.String("provider", metadata.Provider),
 					zap.String("model", metadata.Model),
@@ -326,8 +315,8 @@ func (c *AskCommand) handleFallbackFail(ctx context.Context, cmdCtx *domain.Comm
 			if strings.TrimSpace(response.Message) != "" {
 				clarification = strings.TrimSpace(response.Message)
 			}
-		} else if err != nil && c.deps.Logger != nil {
-			c.deps.Logger.Warn("Failed to generate smart clarification",
+		} else if err != nil && w.logger != nil {
+			w.logger.Warn("Failed to generate smart clarification",
 				zap.String("question", sanitizedQuestion),
 				zap.Error(err),
 			)
@@ -339,9 +328,9 @@ func (c *AskCommand) handleFallbackFail(ctx context.Context, cmdCtx *domain.Comm
 		clarification = fmt.Sprintf("누구를 말씀하신 건지 잘 모르겠어요. \"%s\"를 말씀하신 건가요? 홀로라이브 소속이 맞는지 확인하신 뒤 다시 질문해 주세요.", escaped)
 	}
 
-	if err := c.deps.SendMessage(cmdCtx.Room, clarification); err != nil {
-		if c.deps.Logger != nil {
-			c.deps.Logger.Error("Failed to send clarification message",
+	if err := w.deps.SendMessage(w.cmdCtx.Room, clarification); err != nil {
+		if w.logger != nil {
+			w.logger.Error("Failed to send clarification message",
 				zap.String("question", sanitizedQuestion),
 				zap.Error(err),
 			)

@@ -298,7 +298,7 @@ func (ys *YouTubeScheduler) SendMilestoneNotifications(ctx context.Context, send
 		return nil
 	}
 
-	ys.logger.Info("Processing stats changes for notifications",
+	ys.logger.Debug("Processing stats changes for notifications",
 		zap.Int("changes", len(changes)))
 
 	sentCount := 0

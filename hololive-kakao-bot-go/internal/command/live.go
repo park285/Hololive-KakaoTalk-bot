@@ -24,6 +24,10 @@ func (c *LiveCommand) Description() string {
 }
 
 func (c *LiveCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext, params map[string]any) error {
+	if err := c.ensureDeps(); err != nil {
+		return err
+	}
+
 	memberName, hasMember := params["member"].(string)
 
 	if hasMember && memberName != "" {
@@ -63,4 +67,20 @@ func (c *LiveCommand) Execute(ctx context.Context, cmdCtx *domain.CommandContext
 
 	message := c.deps.Formatter.FormatLiveStreams(streams)
 	return c.deps.SendMessage(cmdCtx.Room, message)
+}
+
+func (c *LiveCommand) ensureDeps() error {
+	if c == nil || c.deps == nil {
+		return fmt.Errorf("live command dependencies not configured")
+	}
+
+	if c.deps.SendMessage == nil || c.deps.SendError == nil {
+		return fmt.Errorf("message callbacks not configured")
+	}
+
+	if c.deps.Matcher == nil || c.deps.Holodex == nil || c.deps.Formatter == nil {
+		return fmt.Errorf("live command services not configured")
+	}
+
+	return nil
 }

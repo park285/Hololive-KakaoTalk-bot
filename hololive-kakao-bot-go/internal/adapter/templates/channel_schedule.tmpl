@@ -1,0 +1,16 @@
+{{- if not .ChannelName -}}
+❌ 채널 정보를 찾을 수 없습니다.
+{{- else if eq .Count 0 -}}
+📅 {{.ChannelName}}
+{{.Days}}일 이내 예정된 방송이 없습니다.
+{{- else -}}
+📅 {{.ChannelName}} 일정 ({{.Days}}일 이내, {{.Count}}개)
+
+{{- range $index, $entry := .Streams -}}
+{{- if gt $index 0 }}
+
+{{- end -}}{{$entry.StatusIcon}} {{$entry.Title}}
+   {{$entry.TimeInfo}}
+   {{$entry.URL}}
+{{- end -}}
+{{- end -}}

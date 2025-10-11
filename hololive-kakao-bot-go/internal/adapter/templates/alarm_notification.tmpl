@@ -1,0 +1,11 @@
+🔔 {{.ChannelName}} 방송 알림
+
+{{- if gt .MinutesUntil 0 -}}
+⏰ {{.MinutesUntil}}분 후 시작 예정
+{{- else -}}
+⏰ 곧 시작합니다!
+{{- end}}
+
+📺 {{.Title}}
+
+{{.URL}}

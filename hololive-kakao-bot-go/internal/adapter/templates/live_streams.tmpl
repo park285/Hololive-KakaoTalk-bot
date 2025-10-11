@@ -1,0 +1,13 @@
+{{- if eq .Count 0 -}}
+🔴 현재 방송 중인 스트림이 없습니다.
+{{- else -}}
+🔴 현재 라이브 중 ({{.Count}}개)
+
+{{- range $index, $stream := .Streams -}}
+{{- if gt $index 0 }}
+
+{{- end -}}📺 {{$stream.ChannelName}}
+   {{$stream.Title}}
+   {{$stream.URL}}
+{{- end -}}
+{{- end -}}

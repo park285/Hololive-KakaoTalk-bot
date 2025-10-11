@@ -65,9 +65,11 @@ func (a *MemberServiceAdapter) GetAllMembers() []*domain.Member {
 	return members
 }
 
-
 // WithContext creates a new adapter with custom context
-func (a *MemberServiceAdapter) WithContext(ctx context.Context) *MemberServiceAdapter {
+func (a *MemberServiceAdapter) WithContext(ctx context.Context) domain.MemberDataProvider {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return &MemberServiceAdapter{
 		cache: a.cache,
 		ctx:   ctx,

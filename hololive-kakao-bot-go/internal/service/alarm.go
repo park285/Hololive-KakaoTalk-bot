@@ -124,9 +124,9 @@ func (as *AlarmService) RemoveAlarm(ctx context.Context, roomID, userID, channel
 	if err == nil && len(remainingAlarms) == 0 {
 		as.cache.SRem(ctx, AlarmRegistryKey, []string{registryKey})
 		as.logger.Info("User removed from registry (no alarms left)",
-		zap.String("room_id", roomID),
-		zap.String("user_id", userID),
-	)
+			zap.String("room_id", roomID),
+			zap.String("user_id", userID),
+		)
 	}
 
 	as.logger.Info("Alarm removed",
@@ -196,8 +196,6 @@ func (as *AlarmService) CheckUpcomingStreams(ctx context.Context) ([]*domain.Ala
 		return nil, err
 	}
 
-	
-
 	if len(channelIDs) == 0 {
 		return []*domain.AlarmNotification{}, nil
 	}
@@ -226,19 +224,13 @@ func (as *AlarmService) CheckUpcomingStreams(ctx context.Context) ([]*domain.Ala
 			continue
 		}
 
-	
-		go func(channelID string, streams []*domain.Stream) {
-			childCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			as.updateNextStreamCacheFromStreams(childCtx, channelID, streams)
-		}(result.channelID, result.streams)
+		as.triggerCacheRefresh(ctx, result.channelID, result.streams)
 
 		if len(result.streams) == 0 {
 			continue
 		}
 
 		upcomingStreams := as.filterUpcomingStreams(result.streams, now)
-	
 
 		for _, stream := range upcomingStreams {
 			roomNotifs, err := as.createNotification(ctx, stream, result.channelID, result.subscribers)
@@ -312,8 +304,6 @@ func (as *AlarmService) filterUpcomingStreams(streams []*domain.Stream, now time
 		secondsUntil := int(timeUntil.Seconds())
 		minutesUntil := secondsUntil / 60
 
-
-
 		shouldNotify := false
 		for _, target := range as.targetMinutes {
 			if minutesUntil == target {
@@ -328,6 +318,24 @@ func (as *AlarmService) filterUpcomingStreams(streams []*domain.Stream, now time
 	}
 
 	return filtered
+}
+
+func (as *AlarmService) triggerCacheRefresh(parent context.Context, channelID string, streams []*domain.Stream) {
+	if parent == nil {
+		return
+	}
+
+	select {
+	case <-parent.Done():
+		return
+	default:
+	}
+
+	go func(p context.Context, chID string, data []*domain.Stream) {
+		ctxWithTimeout, cancel := context.WithTimeout(p, 10*time.Second)
+		defer cancel()
+		as.updateNextStreamCacheFromStreams(ctxWithTimeout, chID, data)
+	}(parent, channelID, streams)
 }
 
 func (as *AlarmService) createNotification(ctx context.Context, stream *domain.Stream, channelID string, subscriberKeys []string) ([]*domain.AlarmNotification, error) {
@@ -360,8 +368,6 @@ func (as *AlarmService) createNotification(ctx context.Context, stream *domain.S
 	usersByRoom := make(map[string][]string)
 	keysToRemove := make([]string, 0)
 	channelSubsKey := as.getChannelSubscribersKey(channelID)
-
-	
 
 	for _, registryKey := range subscriberKeys {
 		parts := splitRegistryKey(registryKey)
