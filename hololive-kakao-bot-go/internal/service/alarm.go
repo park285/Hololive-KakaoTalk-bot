@@ -530,7 +530,7 @@ func (as *AlarmService) GetNextStreamInfo(ctx context.Context, channelID string)
 
 	shortTitle := util.TruncateString(title, constants.StringLimits.NextStreamTitle)
 
-	return fmt.Sprintf("다음 방송: %s (%s)\n[%s](https://youtube.com/watch?v=%s)", kstTime, timeDetail, shortTitle, videoID), nil
+	return fmt.Sprintf("다음 방송: %s (%s)\n   [%s](https://youtube.com/watch?v=%s)", kstTime, timeDetail, shortTitle, videoID), nil
 }
 
 func (as *AlarmService) updateNextStreamCacheFromStreams(ctx context.Context, channelID string, streams []*domain.Stream) {

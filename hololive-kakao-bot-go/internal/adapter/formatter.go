@@ -412,7 +412,7 @@ func (f *ResponseFormatter) fallbackAlarmList(data alarmListTemplateData) string
 	for idx, alarm := range data.Alarms {
 		sb.WriteString(fmt.Sprintf("%d. %s\n", idx+1, alarm.MemberName))
 		if strings.TrimSpace(alarm.NextStream) != "" {
-			sb.WriteString(fmt.Sprintf("   %s\n", alarm.NextStream))
+			sb.WriteString(fmt.Sprintf("%s\n", alarm.NextStream))
 		}
 		sb.WriteString("\n")
 	}
