@@ -7,7 +7,7 @@
 예) {{.Prefix}}알람 추가 미코
 {{- else -}}
 🔔 설정된 알람 ({{.Count}}개)
-
+{{- /* avoid extra blank line */}}
 {{range $index, $alarm := .Alarms}}
 {{add $index 1}}. {{$alarm.MemberName}}
 {{- if $alarm.NextStream}}
