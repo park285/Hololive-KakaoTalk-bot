@@ -17,20 +17,27 @@ type MatchCacheEntry struct {
 	Timestamp time.Time
 }
 
+type matchCandidate struct {
+	channelID  string
+	memberName string
+	source     string
+}
+
 type ChannelSelector interface {
 	SelectBestChannel(ctx context.Context, query string, candidates []*domain.Channel) (*domain.Channel, error)
 }
 
 type MemberMatcher struct {
-	membersData   domain.MemberDataProvider
-	aliasToName   map[string]string
-	cache         *CacheService
-	holodex       *HolodexService
-	selector      ChannelSelector
-	logger        *zap.Logger
-	matchCache    map[string]*MatchCacheEntry
-	matchCacheMu  sync.RWMutex
-	matchCacheTTL time.Duration
+	membersData           domain.MemberDataProvider
+	aliasToName           map[string]string
+	cache                 *CacheService
+	holodex               *HolodexService
+	selector              ChannelSelector
+	logger                *zap.Logger
+	matchCache            map[string]*MatchCacheEntry
+	matchCacheMu          sync.RWMutex
+	matchCacheTTL         time.Duration
+	matchCacheLastCleanup time.Time
 }
 
 func NewMemberMatcher(
@@ -46,13 +53,14 @@ func NewMemberMatcher(
 	}
 
 	mm := &MemberMatcher{
-		membersData:   membersData,
-		cache:         cache,
-		holodex:       holodex,
-		selector:      selector,
-		logger:        logger,
-		matchCache:    make(map[string]*MatchCacheEntry),
-		matchCacheTTL: 1 * time.Minute,
+		membersData:           membersData,
+		cache:                 cache,
+		holodex:               holodex,
+		selector:              selector,
+		logger:                logger,
+		matchCache:            make(map[string]*MatchCacheEntry),
+		matchCacheTTL:         1 * time.Minute,
+		matchCacheLastCleanup: time.Now(),
 	}
 
 	provider := membersData.WithContext(ctx)
@@ -92,85 +100,120 @@ func (mm *MemberMatcher) buildAliasMap(provider domain.MemberDataProvider) map[s
 	return aliasMap
 }
 
-// tryExactAliasMatch attempts exact match via pre-built alias map
-func (mm *MemberMatcher) tryExactAliasMatch(ctx context.Context, queryNorm string) (*domain.Channel, error) {
+// tryExactAliasMatch attempts exact match via pre-built alias map without hitting Holodex repeatedly.
+func (mm *MemberMatcher) tryExactAliasMatch(ctx context.Context, provider domain.MemberDataProvider, queryNorm string) *matchCandidate {
 	englishName, found := mm.aliasToName[queryNorm]
 	if !found {
-		return nil, nil
+		return nil
 	}
 
-	provider := mm.membersData.WithContext(ctx)
-
-	// Try Redis cache first
-	if channelID, err := mm.cache.GetMemberChannelID(ctx, englishName); err == nil && channelID != "" {
-		if channel, err := mm.holodex.GetChannel(ctx, channelID); err == nil && channel != nil {
-			return channel, nil
-		}
+	if member := provider.FindMemberByName(englishName); member != nil && member.ChannelID != "" {
+		return mm.candidateFromMember(member, "alias-map")
 	}
 
-	// Fallback to static data
-	if member := provider.FindMemberByName(englishName); member != nil {
-		if channel, err := mm.holodex.GetChannel(ctx, member.ChannelID); err == nil && channel != nil {
-			return channel, nil
-		}
+	channelID, err := mm.cache.GetMemberChannelID(ctx, englishName)
+	if err != nil {
+		mm.logger.Warn("Failed to resolve alias from cache",
+			zap.String("member", englishName),
+			zap.Error(err),
+		)
+		return nil
+	}
+	if channelID == "" {
+		return nil
 	}
 
-	return nil, nil
+	return mm.candidateFromDynamic(provider, englishName, channelID, "alias-redis")
 }
 
-// tryExactRedisMatch attempts exact match in dynamic Redis data
-func (mm *MemberMatcher) tryExactRedisMatch(ctx context.Context, query string, dynamicMembers map[string]string) (*domain.Channel, error) {
+// tryExactRedisMatch attempts exact match in dynamic Redis data without immediate Holodex calls.
+func (mm *MemberMatcher) tryExactRedisMatch(provider domain.MemberDataProvider, query string, dynamicMembers map[string]string) *matchCandidate {
 	for name, channelID := range dynamicMembers {
 		if strings.EqualFold(name, query) {
-			if channel, err := mm.holodex.GetChannel(ctx, channelID); err == nil && channel != nil {
-				return channel, nil
-			}
+			return mm.candidateFromDynamic(provider, name, channelID, "redis-exact")
 		}
 	}
-	return nil, nil
+	return nil
 }
 
-// tryPartialStaticMatch attempts partial match in static member data
-func (mm *MemberMatcher) tryPartialStaticMatch(ctx context.Context, queryNorm string) (*domain.Channel, error) {
-	provider := mm.membersData.WithContext(ctx)
+// tryPartialStaticMatch attempts partial match in static member data.
+func (mm *MemberMatcher) tryPartialStaticMatch(provider domain.MemberDataProvider, queryNorm string) *matchCandidate {
 	for _, member := range provider.GetAllMembers() {
 		nameNorm := util.Normalize(member.Name)
 		if strings.Contains(nameNorm, queryNorm) || strings.Contains(queryNorm, nameNorm) {
-			if channel, err := mm.holodex.GetChannel(ctx, member.ChannelID); err == nil && channel != nil {
-				return channel, nil
-			}
+			return mm.candidateFromMember(member, "static-partial")
 		}
 	}
-	return nil, nil
+	return nil
 }
 
-// tryPartialRedisMatch attempts partial match in dynamic Redis data
-func (mm *MemberMatcher) tryPartialRedisMatch(ctx context.Context, queryNorm string, dynamicMembers map[string]string) (*domain.Channel, error) {
+// tryPartialRedisMatch attempts partial match in dynamic Redis data.
+func (mm *MemberMatcher) tryPartialRedisMatch(provider domain.MemberDataProvider, queryNorm string, dynamicMembers map[string]string) *matchCandidate {
 	for name, channelID := range dynamicMembers {
 		nameNorm := util.Normalize(name)
 		if strings.Contains(nameNorm, queryNorm) || strings.Contains(queryNorm, nameNorm) {
-			if channel, err := mm.holodex.GetChannel(ctx, channelID); err == nil && channel != nil {
-				return channel, nil
-			}
+			return mm.candidateFromDynamic(provider, name, channelID, "redis-partial")
 		}
 	}
-	return nil, nil
+	return nil
 }
 
-// tryPartialAliasMatch attempts partial match across all aliases
-func (mm *MemberMatcher) tryPartialAliasMatch(ctx context.Context, queryNorm string) (*domain.Channel, error) {
-	provider := mm.membersData.WithContext(ctx)
+// tryPartialAliasMatch attempts partial match across all aliases.
+func (mm *MemberMatcher) tryPartialAliasMatch(provider domain.MemberDataProvider, queryNorm string) *matchCandidate {
 	for _, member := range provider.GetAllMembers() {
 		for _, alias := range member.GetAllAliases() {
 			aliasNorm := util.Normalize(alias)
 			if strings.Contains(aliasNorm, queryNorm) || strings.Contains(queryNorm, aliasNorm) {
-				if channel, err := mm.holodex.GetChannel(ctx, member.ChannelID); err == nil && channel != nil {
-					return channel, nil
-				}
+				return mm.candidateFromMember(member, "alias-partial")
 			}
 		}
 	}
-	return nil, nil
+	return nil
+}
+
+func (mm *MemberMatcher) candidateFromMember(member *domain.Member, source string) *matchCandidate {
+	if member == nil || member.ChannelID == "" {
+		return nil
+	}
+
+	name := member.Name
+	if name == "" {
+		name = member.NameJa
+	}
+	if name == "" {
+		name = member.ChannelID
+	}
+
+	return &matchCandidate{
+		channelID:  member.ChannelID,
+		memberName: name,
+		source:     source,
+	}
+}
+
+func (mm *MemberMatcher) candidateFromDynamic(provider domain.MemberDataProvider, name, channelID, source string) *matchCandidate {
+	if channelID == "" {
+		return nil
+	}
+
+	if provider != nil {
+		if member := provider.FindMemberByChannelID(channelID); member != nil {
+			if candidate := mm.candidateFromMember(member, source); candidate != nil {
+				return candidate
+			}
+		}
+	}
+
+	displayName := name
+	if displayName == "" {
+		displayName = channelID
+	}
+
+	return &matchCandidate{
+		channelID:  channelID,
+		memberName: displayName,
+		source:     source,
+	}
 }
 
 // tryHolodexAPISearch searches via external Holodex API
@@ -189,6 +232,108 @@ func (mm *MemberMatcher) tryHolodexAPISearch(ctx context.Context, query string) 
 	}
 
 	return channels, nil
+}
+
+func (mm *MemberMatcher) hydrateChannel(ctx context.Context, candidate *matchCandidate) (*domain.Channel, error) {
+	if candidate == nil {
+		return nil, nil
+	}
+
+	fallback := &domain.Channel{
+		ID:   candidate.channelID,
+		Name: candidate.memberName,
+	}
+	if candidate.memberName != "" {
+		fallback.EnglishName = toStringPtr(candidate.memberName)
+	}
+
+	if mm.holodex == nil {
+		return fallback, nil
+	}
+
+	channel, err := mm.holodex.GetChannel(ctx, candidate.channelID)
+	if err != nil {
+		mm.logger.Warn("Failed to fetch channel from Holodex",
+			zap.String("channel_id", candidate.channelID),
+			zap.String("source", candidate.source),
+			zap.Error(err),
+		)
+		return fallback, nil
+	}
+
+	if channel == nil {
+		mm.logger.Warn("Holodex returned empty channel",
+			zap.String("channel_id", candidate.channelID),
+			zap.String("source", candidate.source),
+		)
+		return fallback, nil
+	}
+
+	if candidate.memberName != "" {
+		if channel.Name == "" {
+			channel.Name = candidate.memberName
+		}
+		if channel.EnglishName == nil {
+			channel.EnglishName = toStringPtr(candidate.memberName)
+		}
+	}
+
+	return channel, nil
+}
+
+func (mm *MemberMatcher) finalizeCandidate(ctx context.Context, candidate *matchCandidate) (*domain.Channel, error) {
+	if candidate == nil {
+		return nil, nil
+	}
+
+	if candidate.channelID == "" {
+		mm.logger.Warn("Match candidate missing channel ID",
+			zap.String("member", candidate.memberName),
+			zap.String("source", candidate.source),
+		)
+		return nil, nil
+	}
+
+	channel, err := mm.hydrateChannel(ctx, candidate)
+	if err != nil {
+		return nil, err
+	}
+
+	if channel != nil {
+		mm.logger.Debug("Match candidate resolved",
+			zap.String("channel_id", candidate.channelID),
+			zap.String("member", candidate.memberName),
+			zap.String("source", candidate.source),
+		)
+	}
+
+	return channel, nil
+}
+
+func (mm *MemberMatcher) maybeCleanupMatchCache() {
+	mm.matchCacheMu.Lock()
+	defer mm.matchCacheMu.Unlock()
+
+	if time.Since(mm.matchCacheLastCleanup) < mm.matchCacheTTL {
+		return
+	}
+
+	cutoff := time.Now().Add(-mm.matchCacheTTL)
+	for key, entry := range mm.matchCache {
+		if entry == nil || entry.Timestamp.Before(cutoff) {
+			delete(mm.matchCache, key)
+		}
+	}
+
+	mm.matchCacheLastCleanup = time.Now()
+}
+
+func toStringPtr(value string) *string {
+	if value == "" {
+		return nil
+	}
+	copy := value
+	return &copy
 }
 
 // selectBestFromCandidates selects best channel from multiple candidates
@@ -263,21 +408,17 @@ func (mm *MemberMatcher) FindBestMatch(ctx context.Context, query string) (*doma
 	}
 	mm.matchCacheMu.Unlock()
 
-	go func() {
-		time.Sleep(mm.matchCacheTTL)
-		mm.matchCacheMu.Lock()
-		delete(mm.matchCache, cacheKey)
-		mm.matchCacheMu.Unlock()
-	}()
+	mm.maybeCleanupMatchCache()
 
 	return channel, err
 }
 
 func (mm *MemberMatcher) findBestMatchImpl(ctx context.Context, query string) (*domain.Channel, error) {
+	provider := mm.membersData.WithContext(ctx)
 	queryNorm := util.NormalizeSuffix(query)
 
 	// Strategy 1: Exact alias match (fastest)
-	if channel, err := mm.tryExactAliasMatch(ctx, queryNorm); err != nil || channel != nil {
+	if channel, err := mm.finalizeCandidate(ctx, mm.tryExactAliasMatch(ctx, provider, queryNorm)); err != nil || channel != nil {
 		return channel, err
 	}
 
@@ -285,22 +426,22 @@ func (mm *MemberMatcher) findBestMatchImpl(ctx context.Context, query string) (*
 	dynamicMembers := mm.loadDynamicMembers(ctx)
 
 	// Strategy 2: Exact match in Redis
-	if channel, err := mm.tryExactRedisMatch(ctx, query, dynamicMembers); err != nil || channel != nil {
+	if channel, err := mm.finalizeCandidate(ctx, mm.tryExactRedisMatch(provider, query, dynamicMembers)); err != nil || channel != nil {
 		return channel, err
 	}
 
 	// Strategy 3: Partial match in static data
-	if channel, err := mm.tryPartialStaticMatch(ctx, queryNorm); err != nil || channel != nil {
+	if channel, err := mm.finalizeCandidate(ctx, mm.tryPartialStaticMatch(provider, queryNorm)); err != nil || channel != nil {
 		return channel, err
 	}
 
 	// Strategy 4: Partial match in Redis
-	if channel, err := mm.tryPartialRedisMatch(ctx, queryNorm, dynamicMembers); err != nil || channel != nil {
+	if channel, err := mm.finalizeCandidate(ctx, mm.tryPartialRedisMatch(provider, queryNorm, dynamicMembers)); err != nil || channel != nil {
 		return channel, err
 	}
 
 	// Strategy 5: Partial alias match
-	if channel, err := mm.tryPartialAliasMatch(ctx, queryNorm); err != nil || channel != nil {
+	if channel, err := mm.finalizeCandidate(ctx, mm.tryPartialAliasMatch(provider, queryNorm)); err != nil || channel != nil {
 		return channel, err
 	}
 
