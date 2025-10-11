@@ -14,6 +14,9 @@
 {{indent 3 $alarm.NextStream}}
 {{- end}}
 
+{{- if lt (add $index 1) $.Count}}
+
+{{- end}}
 {{- end}}
 💡 {{.Prefix}}알람 제거 [멤버명] 으로 알람 해제
 {{- end -}}
