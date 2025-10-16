@@ -3,6 +3,8 @@ package youtube
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,7 +119,10 @@ func (ys *YouTubeService) GetUpcomingStreams(ctx context.Context, channelIDs []s
 		channelIDs = channelIDs[:maxChannelsPerCall]
 	}
 
-	cacheKey := fmt.Sprintf("youtube:upcoming:%d", len(channelIDs))
+	sortedIDs := make([]string, len(channelIDs))
+	copy(sortedIDs, channelIDs)
+	sort.Strings(sortedIDs)
+	cacheKey := fmt.Sprintf("youtube:upcoming:%s", strings.Join(sortedIDs, ","))
 	if cached, found := ys.cache.GetStreams(cacheKey); found {
 		ys.logger.Debug("YouTube cache hit (backup avoided)",
 			zap.Int("streams", len(cached)))
