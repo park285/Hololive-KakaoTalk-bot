@@ -138,12 +138,16 @@ func Build(ctx context.Context, cfg *config.Config, logger *zap.Logger) (contain
 		return nil, fmt.Errorf("failed to create model manager: %w", err)
 	}
 
-	geminiSvc := ai.NewGeminiService(modelManager, logger)
+	geminiSvc := ai.NewGeminiService(modelManager, logger, ai.GeminiServiceOptions{
+		Parse: ai.ParseEngineConfig{
+			FallbackMinConfidence: cfg.Ask.FallbackMinConfidence,
+		},
+	})
 	closers = append(closers, func() {
 		geminiSvc.Close()
 	})
 
-	if err := geminiSvc.InitializeMemberListCache(ctx, membersData); err != nil {
+	if err := geminiSvc.InitializeMemberListCache(context.Background(), membersData); err != nil {
 		logger.Warn("Failed to initialize member list cache, will use inline member list", zap.Error(err))
 	} else {
 		logger.Info("Member list context cache initialized successfully")

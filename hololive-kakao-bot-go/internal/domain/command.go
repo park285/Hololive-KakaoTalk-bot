@@ -25,7 +25,7 @@ func (c CommandType) IsValid() bool {
 	switch c {
 	case CommandLive, CommandUpcoming, CommandSchedule, CommandHelp,
 		CommandAlarmAdd, CommandAlarmRemove, CommandAlarmList, CommandAlarmClear,
-		CommandAsk, CommandMemberInfo, CommandUnknown:
+		CommandAsk, CommandMemberInfo, CommandStats, CommandUnknown:
 		return true
 	default:
 		return false

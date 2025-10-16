@@ -203,6 +203,12 @@ func (ys *YouTubeScheduler) trackAllSubscribers(ctx context.Context) {
 func (ys *YouTubeScheduler) fetchRecentVideosRotation(ctx context.Context, batchNum int) {
 	channels := ys.getRotatingBatch(batchNum, channelsPerBatch)
 
+	if len(channels) == 0 {
+		ys.logger.Info("Skipping recent videos batch: no channels configured",
+			zap.Int("batch", batchNum))
+		return
+	}
+
 	ys.logger.Info("Fetching recent videos for batch",
 		zap.Int("batch", batchNum),
 		zap.Int("channels", len(channels)),
@@ -244,6 +250,10 @@ func (ys *YouTubeScheduler) getRotatingBatch(batchNum int, size int) []string {
 	}
 
 	total := len(allChannels)
+	if total == 0 || size <= 0 {
+		return []string{}
+	}
+
 	start := (batchNum * size) % total
 	end := start + size
 
